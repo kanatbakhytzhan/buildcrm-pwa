@@ -6,8 +6,8 @@ import { sanitizePhoneForTel, sanitizePhoneForWa } from '../utils/phone'
 import { useLeads } from '../context/LeadsContext'
 import LeadActionSheet from './LeadActionSheet'
 
-const LONG_PRESS_MS = 450
-const MOVE_THRESHOLD_PX = 8
+const LONG_PRESS_MS = 400
+const MOVE_THRESHOLD_PX = 10
 
 type LeadListItemProps = {
   lead: NormalizedLead

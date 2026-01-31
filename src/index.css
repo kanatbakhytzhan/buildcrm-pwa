@@ -67,11 +67,11 @@ a {
   background-color: var(--bg);
 }
 
-/* One safe-area: space for fixed bottom bar (height ~72px + safe-area) */
+/* Single safe-area: space for floating bottom bar so content doesn't go under it */
 .app-content {
   flex: 1;
   padding: 20px 16px;
-  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0));
+  padding-bottom: calc(100px + env(safe-area-inset-bottom, 0));
 }
 
 .page-card {
@@ -306,25 +306,23 @@ a {
   gap: 12px;
 }
 
-/* Bar flush to bottom; only internal padding for home indicator (no extra gap) */
+/* Floating bottom bar: one safe-area, compact, centered, no extra gap */
 .bottom-tabs {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 0;
-  width: calc(100% - 24px);
-  max-width: 396px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0));
+  width: min(396px, calc(100% - 24px));
   margin: 0 12px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-bottom: none;
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: center;
-  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0));
+  padding: 10px 12px;
   gap: 8px;
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-  box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.08);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-md);
   z-index: 10;
 }
 
@@ -979,49 +977,46 @@ a {
   color: var(--danger);
 }
 
-/* Action sheet (долгое нажатие на карточку лида) — above BottomTabs, safe area */
+/* Quick actions: centered modal (not bottom sheet) */
 .action-sheet-backdrop {
   position: fixed;
   inset: 0;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
   background: rgba(15, 23, 42, 0.45);
   display: grid;
-  align-items: flex-end;
-  justify-items: center;
+  place-items: center;
   z-index: 100;
-  padding: 0 16px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 24px 16px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
 
 .action-sheet {
-  width: 100%;
-  max-width: 400px;
+  width: calc(100% - 32px);
+  max-width: 340px;
+  max-height: calc(100vh - 48px - env(safe-area-inset-bottom, 0));
   background: var(--card);
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-  padding: 16px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.2);
+  border-radius: 20px;
+  padding: 20px 16px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.2);
   display: grid;
   gap: 12px;
-  transform: translateY(0);
-  animation: action-sheet-in 0.25s ease-out;
+  overflow: auto;
+  animation: action-sheet-fade 0.2s ease-out;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
 
-@keyframes action-sheet-in {
+@keyframes action-sheet-fade {
   from {
-    transform: translateY(100%);
+    opacity: 0;
+    transform: scale(0.96);
   }
   to {
-    transform: translateY(0);
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
