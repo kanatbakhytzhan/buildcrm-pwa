@@ -336,8 +336,14 @@ const extractAdminTenants = (data: unknown): AdminTenant[] => {
 
 const extractTenantWhatsapps = (data: unknown): TenantWhatsapp[] => {
   if (Array.isArray(data)) return data as TenantWhatsapp[]
+  if (Array.isArray((data as { whatsapp?: unknown[] })?.whatsapp)) {
+    return (data as { whatsapp: TenantWhatsapp[] }).whatsapp
+  }
   if (Array.isArray((data as { whatsapps?: unknown[] })?.whatsapps)) {
     return (data as { whatsapps: TenantWhatsapp[] }).whatsapps
+  }
+  if (Array.isArray((data as { items?: unknown[] })?.items)) {
+    return (data as { items: TenantWhatsapp[] }).items
   }
   if (Array.isArray((data as { data?: unknown[] })?.data)) {
     return (data as { data: TenantWhatsapp[] }).data
@@ -391,14 +397,21 @@ export const updateAdminTenant = async (
 export const getTenantWhatsapps = async (
   tenantId: string | number,
 ): Promise<TenantWhatsapp[]> => {
-  const data = await request<unknown>(
-    `/api/admin/tenants/${tenantId}/whatsapp`,
-    {
-      method: 'GET',
-      headers: { ...authHeaders() },
-    },
-  )
-  return extractTenantWhatsapps(data)
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/whatsapp`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  if (response.status === 404) return []
+  if (!response.ok) throw await buildError(response)
+  const text = await response.text()
+  if (!text) return []
+  try {
+    const data = JSON.parse(text) as unknown
+    return extractTenantWhatsapps(data)
+  } catch {
+    return []
+  }
 }
 
 export const addTenantWhatsapp = async (

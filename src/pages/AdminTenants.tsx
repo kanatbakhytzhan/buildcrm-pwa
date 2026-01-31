@@ -196,9 +196,10 @@ const AdminTenants = () => {
         waba_id: addWhatsappForm.waba_id.trim() || undefined,
       })
       setAddWhatsappForm({ phone_number: '', phone_number_id: '', verify_token: '', waba_id: '' })
+      setActionError(null)
       await loadWhatsapps(activeTenant.id)
     } catch (err) {
-      const apiError = err as { message?: string }
+      const apiError = err as { status?: number; message?: string }
       setActionError(apiError?.message || 'Не удалось добавить номер')
     } finally {
       setActionStatus('idle')
