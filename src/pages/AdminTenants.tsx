@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   addTenantWhatsapp,
   createAdminTenant,
+  deleteTenantWhatsapp,
   getAdminTenants,
   getTenantWhatsapps,
   updateAdminTenant,
@@ -42,6 +43,7 @@ const AdminTenants = () => {
 
   const [whatsapps, setWhatsapps] = useState<TenantWhatsapp[]>([])
   const [whatsappStatus, setWhatsappStatus] = useState<'idle' | 'loading'>('idle')
+  const [deletingAccountId, setDeletingAccountId] = useState<string | number | null>(null)
   const [addWhatsappForm, setAddWhatsappForm] = useState({
     phone_number: '',
     phone_number_id: '',
@@ -203,6 +205,23 @@ const AdminTenants = () => {
       setActionError(apiError?.message || 'Не удалось добавить номер')
     } finally {
       setActionStatus('idle')
+    }
+  }
+
+  const handleDeleteWhatsapp = async (w: TenantWhatsapp) => {
+    if (!activeTenant) return
+    const id = w.id ?? w.phone_number_id
+    if (!window.confirm(`Удалить номер ${w.phone_number}?`)) return
+    setDeletingAccountId(id)
+    setActionError(null)
+    try {
+      await deleteTenantWhatsapp(activeTenant.id, id)
+      await loadWhatsapps(activeTenant.id)
+    } catch (err) {
+      const apiError = err as { message?: string }
+      setActionError(apiError?.message || 'Не удалось удалить номер')
+    } finally {
+      setDeletingAccountId(null)
     }
   }
 
@@ -459,12 +478,24 @@ const AdminTenants = () => {
             ) : (
               <div className="admin-whatsapp-list">
                 {whatsapps.map((w, i) => (
-                  <div className="card" key={i}>
-                    <div className="toggle-title">{w.phone_number}</div>
-                    <div className="toggle-subtitle">
-                      ID: {w.phone_number_id} ·{' '}
-                      {w.is_active ? 'Активен' : 'Неактивен'}
+                  <div className="card admin-whatsapp-row" key={w.id ?? w.phone_number_id ?? i}>
+                    <div>
+                      <div className="toggle-title">{w.phone_number}</div>
+                      <div className="toggle-subtitle">
+                        ID: {w.phone_number_id} ·{' '}
+                        {w.is_active ? 'Активен' : 'Неактивен'}
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      className="secondary-button admin-whatsapp-delete"
+                      onClick={() => handleDeleteWhatsapp(w)}
+                      disabled={deletingAccountId === (w.id ?? w.phone_number_id)}
+                    >
+                      {deletingAccountId === (w.id ?? w.phone_number_id)
+                        ? 'Удаляю...'
+                        : 'Удалить'}
+                    </button>
                   </div>
                 ))}
               </div>

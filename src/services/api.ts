@@ -441,3 +441,16 @@ export const addTenantWhatsapp = async (
     },
   )
 }
+
+export const deleteTenantWhatsapp = async (
+  tenantId: string | number,
+  accountId: string | number,
+) => {
+  return request<void>(
+    `/api/admin/tenants/${tenantId}/whatsapps/${accountId}`,
+    {
+      method: 'DELETE',
+      headers: { ...authHeaders() },
+    },
+  )
+}

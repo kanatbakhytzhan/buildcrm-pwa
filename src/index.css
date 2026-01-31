@@ -1126,6 +1126,24 @@ a {
   overflow: auto;
 }
 
+.admin-whatsapp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-whatsapp-row .toggle-title,
+.admin-whatsapp-row .toggle-subtitle {
+  margin: 0;
+}
+
+.admin-whatsapp-delete {
+  flex-shrink: 0;
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
 .dialog-title {
   font-weight: 600;
   font-size: 16px;
