@@ -336,6 +336,9 @@ const extractAdminTenants = (data: unknown): AdminTenant[] => {
 
 const extractTenantWhatsapps = (data: unknown): TenantWhatsapp[] => {
   if (Array.isArray(data)) return data as TenantWhatsapp[]
+  if (Array.isArray((data as { accounts?: unknown[] })?.accounts)) {
+    return (data as { accounts: TenantWhatsapp[] }).accounts
+  }
   if (Array.isArray((data as { whatsapp?: unknown[] })?.whatsapp)) {
     return (data as { whatsapp: TenantWhatsapp[] }).whatsapp
   }
@@ -408,6 +411,9 @@ export const getTenantWhatsapps = async (
   if (!text) return []
   try {
     const data = JSON.parse(text) as unknown
+    if (import.meta.env.DEV) {
+      console.log('[AdminTenants] whatsapp response', data)
+    }
     return extractTenantWhatsapps(data)
   } catch {
     return []
