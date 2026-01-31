@@ -54,7 +54,7 @@ function isNetworkFailure(e: unknown): boolean {
 }
 
 const request = async <T>(path: string, options?: RequestInit) => {
-  const url = `${BASE_URL}${path}`
+  const url = fullUrl(path)
   let response: Response
   try {
     response = await fetch(url, options)
@@ -90,9 +90,16 @@ const authHeaders = (): HeadersInit => {
   return headers
 }
 
+/** Build full API URL (BASE_URL has no trailing slash, path must start with /) */
+function fullUrl(path: string): string {
+  const base = BASE_URL.replace(/\/+$/, '')
+  const p = path.startsWith('/') ? path : `/${path}`
+  return `${base}${p}`
+}
+
 export const login = async (email: string, password: string) => {
   const path = '/api/auth/login'
-  const url = `${BASE_URL}${path}`
+  const url = fullUrl(path)
   const body = new URLSearchParams({ username: email, password }).toString()
   let response: Response
   try {
@@ -148,19 +155,31 @@ export const login = async (email: string, password: string) => {
   throw error
 }
 
-/** Health check for diagnostics (GET /api/health or just BASE_URL) */
+/** Health check for diagnostics (GET /api/health) */
 export const checkApiHealth = async (): Promise<{ ok: boolean; message: string }> => {
-  const url = `${BASE_URL}/api/health`
+  const url = fullUrl('/api/health')
   try {
     const response = await fetch(url, { method: 'GET' })
     if (response.ok) {
       return { ok: true, message: `API доступен (${response.status})` }
     }
-    return { ok: false, message: `API вернул ${response.status}: ${response.statusText}` }
+    if (response.status === 404) {
+      return {
+        ok: false,
+        message: 'API не нашёл /api/health. Проверь BASE_URL и деплой backend.',
+      }
+    }
+    return {
+      ok: false,
+      message: `API вернул ${response.status}: ${response.statusText}`,
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     if (isNetworkFailure(e)) {
-      return { ok: false, message: `Сеть/CORS ошибка: ${msg}. URL: ${BASE_URL}` }
+      return {
+        ok: false,
+        message: 'CORS/Network ошибка. Проверь, что backend разрешает домен Vercel в CORS.',
+      }
     }
     return { ok: false, message: msg }
   }
@@ -283,4 +302,123 @@ export const resetAdminUserPassword = async (
     },
     body: JSON.stringify({ password }),
   })
+}
+
+/* --- Admin Tenants --- */
+
+export type AdminTenant = {
+  id: string | number
+  name: string
+  slug: string
+  is_active: boolean
+  default_owner_user_id?: number | null
+}
+
+export type TenantWhatsapp = {
+  id?: string | number
+  phone_number: string
+  phone_number_id: string
+  is_active: boolean
+  verify_token?: string | null
+  waba_id?: string | null
+}
+
+const extractAdminTenants = (data: unknown): AdminTenant[] => {
+  if (Array.isArray(data)) return data as AdminTenant[]
+  if (Array.isArray((data as { tenants?: unknown[] })?.tenants)) {
+    return (data as { tenants: AdminTenant[] }).tenants
+  }
+  if (Array.isArray((data as { data?: unknown[] })?.data)) {
+    return (data as { data: AdminTenant[] }).data
+  }
+  return []
+}
+
+const extractTenantWhatsapps = (data: unknown): TenantWhatsapp[] => {
+  if (Array.isArray(data)) return data as TenantWhatsapp[]
+  if (Array.isArray((data as { whatsapps?: unknown[] })?.whatsapps)) {
+    return (data as { whatsapps: TenantWhatsapp[] }).whatsapps
+  }
+  if (Array.isArray((data as { data?: unknown[] })?.data)) {
+    return (data as { data: TenantWhatsapp[] }).data
+  }
+  return []
+}
+
+export const getAdminTenants = async (): Promise<AdminTenant[]> => {
+  const data = await request<unknown>('/api/admin/tenants', {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  return extractAdminTenants(data)
+}
+
+export const createAdminTenant = async (payload: {
+  name: string
+  slug: string
+  default_owner_user_id?: number | null
+  is_active: boolean
+}) => {
+  return request<unknown>('/api/admin/tenants', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export const updateAdminTenant = async (
+  tenantId: string | number,
+  payload: {
+    name?: string
+    slug?: string
+    default_owner_user_id?: number | null
+    is_active?: boolean
+  },
+) => {
+  return request<unknown>(`/api/admin/tenants/${tenantId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export const getTenantWhatsapps = async (
+  tenantId: string | number,
+): Promise<TenantWhatsapp[]> => {
+  const data = await request<unknown>(
+    `/api/admin/tenants/${tenantId}/whatsapps`,
+    {
+      method: 'GET',
+      headers: { ...authHeaders() },
+    },
+  )
+  return extractTenantWhatsapps(data)
+}
+
+export const addTenantWhatsapp = async (
+  tenantId: string | number,
+  payload: {
+    phone_number: string
+    phone_number_id: string
+    verify_token?: string
+    waba_id?: string
+  },
+) => {
+  return request<unknown>(
+    `/api/admin/tenants/${tenantId}/whatsapps`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      body: JSON.stringify(payload),
+    },
+  )
 }

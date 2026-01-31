@@ -10,6 +10,7 @@ import Login from './pages/Login'
 import Profile from './pages/Profile'
 import AdminLogin from './pages/AdminLogin'
 import AdminUsers from './pages/AdminUsers'
+import AdminTenants from './pages/AdminTenants'
 
 const AppLayout = () => {
   return (
@@ -75,6 +76,7 @@ const App = () => {
       </Route>
       <Route element={<RequireAdminAuth />}>
         <Route path="/admin/users" element={<AdminUsers />} />
+        <Route path="/admin/tenants" element={<AdminTenants />} />
       </Route>
     </Routes>
   )
