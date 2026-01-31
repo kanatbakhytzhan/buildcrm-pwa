@@ -15,7 +15,7 @@ export const setUnauthorizedHandler = (handler: (() => void) | null) => {
 
 const buildError = async (
   response: Response,
-  options?: { skipUnauthorized?: boolean },
+  options?: { skipUnauthorized?: boolean; isLogin?: boolean },
 ) => {
   let message = 'Ошибка запроса'
   try {
@@ -37,7 +37,7 @@ const buildError = async (
     message = 'Ошибка запроса'
   }
   if (response.status === 401) {
-    message = 'Сессия истекла. Войдите снова.'
+    message = options?.isLogin ? 'Неверный логин или пароль' : 'Сессия истекла. Войдите снова.'
     if (!options?.skipUnauthorized) {
       unauthorizedHandler?.()
     }
@@ -119,7 +119,7 @@ export const login = async (email: string, password: string) => {
     throw error
   }
   if (!response.ok) {
-    throw await buildError(response, { skipUnauthorized: true })
+    throw await buildError(response, { skipUnauthorized: true, isLogin: true })
   }
   const text = await response.text()
   if (!text) {

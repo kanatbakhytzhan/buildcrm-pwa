@@ -51,13 +51,8 @@ const Login = () => {
       localStorage.setItem('buildcrm_profile_email', email.trim())
     } catch (err) {
       const apiError = err as { status?: number; message?: string }
-      if (apiError?.status === 401) {
-        setError('Неверный логин или пароль')
-      } else if (err instanceof TypeError) {
-        setError('Ошибка сети')
-      } else {
-        setError(apiError?.message || 'Не удалось выполнить вход')
-      }
+      // Use specific message from api.ts for all errors
+      setError(apiError?.message || 'Не удалось выполнить вход')
       setStatus('error')
     }
   }
