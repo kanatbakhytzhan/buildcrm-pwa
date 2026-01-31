@@ -142,6 +142,16 @@ a {
   font-weight: 600;
 }
 
+/* Env missing warning (prod only, when VITE_API_BASE_URL not set) */
+.login-env-warn {
+  background: rgba(234, 179, 8, 0.15);
+  color: #a16207;
+  padding: 10px 14px;
+  border-radius: var(--radius-btn);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
 /* Debug panel on login (only visible with ?debug=1 or in dev) */
 .login-debug {
   margin-top: 12px;
@@ -150,6 +160,13 @@ a {
   display: grid;
   gap: 8px;
   text-align: center;
+}
+
+.login-debug-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .login-debug-btn {
@@ -164,6 +181,11 @@ a {
 
 .login-debug-btn:hover {
   background: #f1f5f9;
+}
+
+.login-debug-btn--cache {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 .login-debug-info {

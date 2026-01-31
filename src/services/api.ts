@@ -91,8 +91,9 @@ const authHeaders = (): HeadersInit => {
 }
 
 export const login = async (email: string, password: string) => {
-  const url = `${BASE_URL}/api/auth/login`
-  const body = new URLSearchParams({ username: email, password })
+  const path = '/api/auth/login'
+  const url = `${BASE_URL}${path}`
+  const body = new URLSearchParams({ username: email, password }).toString()
   let response: Response
   try {
     response = await fetch(url, {
@@ -108,12 +109,12 @@ export const login = async (email: string, password: string) => {
     }
     throw new Error(
       isNetworkFailure(e)
-        ? `Ошибка сети: проверьте доступ к API и CORS. URL: ${BASE_URL}`
+        ? 'CORS/Network ошибка. Проверь, что backend разрешает домен Vercel в CORS.'
         : (e instanceof Error ? e.message : String(e))
     ) as ApiError
   }
   if (response.status === 404) {
-    const error = new Error(`API не нашёл /api/auth/login. Проверьте деплой backend. URL: ${BASE_URL}`) as ApiError
+    const error = new Error('API не нашёл /api/auth/login. Проверь BASE_URL и деплой backend.') as ApiError
     error.status = 404
     throw error
   }

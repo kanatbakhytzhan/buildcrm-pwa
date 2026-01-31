@@ -4,8 +4,16 @@ const fallbackWhatsApp = '+77768776637'
 const envApiUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
 export const BASE_URL = envApiUrl || fallbackApiUrl
 
+/** True when PROD build and VITE_API_BASE_URL was not set (using fallback) */
+export const isEnvApiUrlMissing =
+  import.meta.env.PROD && !envApiUrl
+
 export const SUPPORT_WHATSAPP =
   (import.meta.env.VITE_SUPPORT_WHATSAPP as string | undefined)?.trim() || fallbackWhatsApp
+
+/** Build-time ID for cache busting; shown in debug mode */
+export const APP_BUILD_ID =
+  typeof __APP_BUILD_ID__ !== 'undefined' ? __APP_BUILD_ID__ : 'unknown'
 
 /** Check if running in dev or with ?debug=1 query param */
 export const isDebugMode = () =>

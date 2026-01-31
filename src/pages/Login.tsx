@@ -3,7 +3,19 @@ import type { FormEvent } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { checkApiHealth } from '../services/api'
-import { BASE_URL, isDebugMode } from '../config/appConfig'
+import { BASE_URL, APP_BUILD_ID, isDebugMode, isEnvApiUrlMissing } from '../config/appConfig'
+
+const clearCacheAndReload = async () => {
+  if ('caches' in window) {
+    const names = await caches.keys()
+    await Promise.all(names.map((n) => caches.delete(n)))
+  }
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations()
+    await Promise.all(regs.map((r) => r.unregister()))
+  }
+  window.location.reload()
+}
 
 const Login = () => {
   const { login: authLogin, authMessage, clearMessage } = useAuth()
@@ -14,6 +26,7 @@ const Login = () => {
   const [error, setError] = useState<string | null>(null)
   const [healthStatus, setHealthStatus] = useState<string | null>(null)
   const [checkingHealth, setCheckingHealth] = useState(false)
+  const [clearingCache, setClearingCache] = useState(false)
 
   const handleCheckHealth = async () => {
     setCheckingHealth(true)
@@ -21,6 +34,11 @@ const Login = () => {
     const result = await checkApiHealth()
     setHealthStatus(result.ok ? `✓ ${result.message}` : `✗ ${result.message}`)
     setCheckingHealth(false)
+  }
+
+  const handleClearCache = async () => {
+    setClearingCache(true)
+    await clearCacheAndReload()
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -55,6 +73,11 @@ const Login = () => {
           <div className="login-subtitle">Войдите в ваш рабочий кабинет</div>
         </div>
         {authMessage && <div className="alert">{authMessage}</div>}
+        {isEnvApiUrlMissing && (
+          <div className="login-env-warn">
+            ⚠ VITE_API_BASE_URL не задан. Используется fallback. Установи env в Vercel.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="form-grid">
           <label className="field">
             <span className="field-label">Электронная почта</span>
@@ -112,15 +135,26 @@ const Login = () => {
         </div>
         {isDebugMode() && (
           <div className="login-debug">
-            <button
-              type="button"
-              className="login-debug-btn"
-              onClick={handleCheckHealth}
-              disabled={checkingHealth}
-            >
-              {checkingHealth ? 'Проверка...' : 'Проверить API'}
-            </button>
-            <div className="login-debug-info">API: {BASE_URL}</div>
+            <div className="login-debug-info">API URL: {BASE_URL}</div>
+            <div className="login-debug-info">Build: {APP_BUILD_ID}</div>
+            <div className="login-debug-actions">
+              <button
+                type="button"
+                className="login-debug-btn"
+                onClick={handleCheckHealth}
+                disabled={checkingHealth}
+              >
+                {checkingHealth ? 'Проверка...' : 'Проверить API'}
+              </button>
+              <button
+                type="button"
+                className="login-debug-btn login-debug-btn--cache"
+                onClick={handleClearCache}
+                disabled={clearingCache}
+              >
+                {clearingCache ? 'Очистка...' : 'Сбросить кэш'}
+              </button>
+            </div>
             {healthStatus && (
               <div className={`login-debug-result ${healthStatus.startsWith('✓') ? 'ok' : 'fail'}`}>
                 {healthStatus}
