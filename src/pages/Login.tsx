@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { checkApiHealth } from '../services/api'
+import { BASE_URL, isDebugMode } from '../config/appConfig'
 
 const Login = () => {
   const { login: authLogin, authMessage, clearMessage } = useAuth()
@@ -10,6 +12,16 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [healthStatus, setHealthStatus] = useState<string | null>(null)
+  const [checkingHealth, setCheckingHealth] = useState(false)
+
+  const handleCheckHealth = async () => {
+    setCheckingHealth(true)
+    setHealthStatus(null)
+    const result = await checkApiHealth()
+    setHealthStatus(result.ok ? `✓ ${result.message}` : `✗ ${result.message}`)
+    setCheckingHealth(false)
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -98,6 +110,24 @@ const Login = () => {
             Свяжитесь с нами
           </a>
         </div>
+        {isDebugMode() && (
+          <div className="login-debug">
+            <button
+              type="button"
+              className="login-debug-btn"
+              onClick={handleCheckHealth}
+              disabled={checkingHealth}
+            >
+              {checkingHealth ? 'Проверка...' : 'Проверить API'}
+            </button>
+            <div className="login-debug-info">API: {BASE_URL}</div>
+            {healthStatus && (
+              <div className={`login-debug-result ${healthStatus.startsWith('✓') ? 'ok' : 'fail'}`}>
+                {healthStatus}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

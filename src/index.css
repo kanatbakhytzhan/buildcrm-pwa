@@ -142,6 +142,52 @@ a {
   font-weight: 600;
 }
 
+/* Debug panel on login (only visible with ?debug=1 or in dev) */
+.login-debug {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+.login-debug-btn {
+  padding: 8px 12px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--border);
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.login-debug-btn:hover {
+  background: #f1f5f9;
+}
+
+.login-debug-info {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.login-debug-result {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.login-debug-result.ok {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+}
+
+.login-debug-result.fail {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+
 .page-stack {
   display: grid;
   gap: 18px;

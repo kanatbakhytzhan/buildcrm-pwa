@@ -7,7 +7,12 @@ This guide covers deploying the BuildCRM frontend (Vite + React PWA) to Vercel. 
 ## 1. Prerequisites
 
 - **GitHub**: Push the repo to GitHub so Vercel can import it.
-- **Backend**: Ensure the API (e.g. `https://crm-api-5vso.onrender.com`) is running and **CORS allows your Vercel domain** (e.g. `https://your-project.vercel.app`). Otherwise login and API calls will fail.
+- **Backend** must:
+  - Be running at the URL set in `VITE_API_BASE_URL` (e.g. `https://crm-api-5vso.onrender.com`).
+  - Have endpoint `POST /api/auth/login` accepting `application/x-www-form-urlencoded` with `username` and `password`.
+  - Allow **CORS** for your Vercel domain (e.g. `https://your-project.vercel.app`).
+  
+Without CORS, browser blocks all API requests.
 
 ---
 
@@ -58,7 +63,26 @@ In the Vercel project: **Settings** → **Environment Variables**. Add:
 
 ---
 
-## 6. Backend CORS
+## 6. Troubleshooting / Debug mode
+
+If login fails, add `?debug=1` to the URL:
+
+```
+https://your-project.vercel.app/login?debug=1
+```
+
+This shows:
+- **API URL** being used.
+- **"Проверить API"** button — tests connectivity to `/api/health`.
+
+Common issues:
+- **Network/CORS error**: Backend doesn't allow the Vercel domain in CORS.
+- **404 on /api/auth/login**: Backend not deployed or wrong URL.
+- **401/403**: Wrong credentials or user inactive.
+
+---
+
+## 7. Backend CORS
 
 The backend must allow the Vercel origin in CORS, for example:
 
@@ -69,7 +93,7 @@ Otherwise the browser will block API requests (login, leads, etc.). Configure th
 
 ---
 
-## 7. Build output (reference)
+## 8. Build output (reference)
 
 - **Output directory**: `dist/`
 - **Build**: `npm run build` produces `dist/index.html` and `dist/assets/` (JS, CSS, etc.).

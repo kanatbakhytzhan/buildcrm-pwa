@@ -47,8 +47,29 @@ const buildError = async (
   return error
 }
 
+function isNetworkFailure(e: unknown): boolean {
+  if (e instanceof TypeError) return true
+  const msg = e instanceof Error ? e.message : String(e)
+  return /failed to fetch|network error|cors|load failed/i.test(msg)
+}
+
 const request = async <T>(path: string, options?: RequestInit) => {
-  const response = await fetch(`${BASE_URL}${path}`, options)
+  const url = `${BASE_URL}${path}`
+  let response: Response
+  try {
+    response = await fetch(url, options)
+  } catch (e) {
+    if (import.meta.env.DEV) {
+      console.error('[api] fetch failed', { url, method: options?.method ?? 'GET', error: e })
+    }
+    const msg = e instanceof Error ? e.message : String(e)
+    const detail = import.meta.env.DEV ? ` (${url})` : ''
+    throw new Error(
+      isNetworkFailure(e)
+        ? `Сетевая ошибка: проверьте CORS и URL API${detail}`
+        : msg
+    ) as ApiError
+  }
   if (!response.ok) {
     throw await buildError(response)
   }
@@ -70,14 +91,32 @@ const authHeaders = (): HeadersInit => {
 }
 
 export const login = async (email: string, password: string) => {
+  const url = `${BASE_URL}/api/auth/login`
   const body = new URLSearchParams({ username: email, password })
-  const response = await fetch(`${BASE_URL}/api/auth/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body,
-  })
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    })
+  } catch (e) {
+    if (import.meta.env.DEV) {
+      console.error('[api] login fetch failed', { url, error: e })
+    }
+    throw new Error(
+      isNetworkFailure(e)
+        ? `Ошибка сети: проверьте доступ к API и CORS. URL: ${BASE_URL}`
+        : (e instanceof Error ? e.message : String(e))
+    ) as ApiError
+  }
+  if (response.status === 404) {
+    const error = new Error(`API не нашёл /api/auth/login. Проверьте деплой backend. URL: ${BASE_URL}`) as ApiError
+    error.status = 404
+    throw error
+  }
   if (!response.ok) {
     throw await buildError(response, { skipUnauthorized: true })
   }
@@ -106,6 +145,24 @@ export const login = async (email: string, password: string) => {
   const error = new Error('Токен не получен') as ApiError
   error.status = response.status
   throw error
+}
+
+/** Health check for diagnostics (GET /api/health or just BASE_URL) */
+export const checkApiHealth = async (): Promise<{ ok: boolean; message: string }> => {
+  const url = `${BASE_URL}/api/health`
+  try {
+    const response = await fetch(url, { method: 'GET' })
+    if (response.ok) {
+      return { ok: true, message: `API доступен (${response.status})` }
+    }
+    return { ok: false, message: `API вернул ${response.status}: ${response.statusText}` }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (isNetworkFailure(e)) {
+      return { ok: false, message: `Сеть/CORS ошибка: ${msg}. URL: ${BASE_URL}` }
+    }
+    return { ok: false, message: msg }
+  }
 }
 
 export const getLeads = async (): Promise<{ raw: unknown; leads: unknown[] }> => {
