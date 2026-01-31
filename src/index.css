@@ -36,6 +36,12 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -315,6 +321,7 @@ a {
   gap: 8px;
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-md);
+  z-index: 10;
 }
 
 .tab-link {
@@ -591,6 +598,9 @@ a {
   min-height: 0;
   transition: transform 0.15s ease, box-shadow 0.2s ease;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .lead-item:active {
@@ -964,17 +974,21 @@ a {
   color: var(--danger);
 }
 
-/* Action sheet (долгое нажатие на карточку лида) */
+/* Action sheet (долгое нажатие на карточку лида) — above BottomTabs, safe area */
 .action-sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.45);
   display: grid;
   align-items: flex-end;
   justify-items: center;
-  z-index: 15;
-  padding: 16px;
-  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  z-index: 100;
+  padding: 0 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
 }
 
 .action-sheet {
@@ -983,9 +997,21 @@ a {
   background: var(--card);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   padding: 16px;
-  box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.15);
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.2);
   display: grid;
   gap: 12px;
+  transform: translateY(0);
+  animation: action-sheet-in 0.25s ease-out;
+}
+
+@keyframes action-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .action-sheet-title {

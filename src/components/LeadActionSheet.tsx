@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Phone, MessageCircle, CheckCircle, XCircle } from 'lucide-react'
 import type { NormalizedLead } from '../utils/normalizeLead'
 
@@ -22,6 +23,14 @@ const LeadActionSheet = ({
   phoneAvailable,
 }: LeadActionSheetProps) => {
   useEffect(() => {
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [])
+
+  useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
@@ -29,11 +38,12 @@ const LeadActionSheet = ({
     return () => window.removeEventListener('keydown', handleEscape)
   }, [onClose])
 
-  return (
+  const sheet = (
     <div
       className="action-sheet-backdrop"
       role="dialog"
       aria-label="Действия с заявкой"
+      aria-modal="true"
       onClick={onClose}
       onKeyDown={(e) => e.key === 'Enter' && onClose()}
     >
@@ -102,6 +112,8 @@ const LeadActionSheet = ({
       </div>
     </div>
   )
+
+  return createPortal(sheet, document.body)
 }
 
 export default LeadActionSheet

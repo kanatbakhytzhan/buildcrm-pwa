@@ -6,7 +6,8 @@ import { sanitizePhoneForTel, sanitizePhoneForWa } from '../utils/phone'
 import { useLeads } from '../context/LeadsContext'
 import LeadActionSheet from './LeadActionSheet'
 
-const LONG_PRESS_MS = 400
+const LONG_PRESS_MS = 450
+const MOVE_THRESHOLD_PX = 8
 
 type LeadListItemProps = {
   lead: NormalizedLead
@@ -17,8 +18,9 @@ type LeadListItemProps = {
 const LeadListItem = ({ lead, onClick, pendingSync }: LeadListItemProps) => {
   const { updateLeadStatus } = useLeads()
   const [menuOpen, setMenuOpen] = useState(false)
-  const longPressTimerRef = useRef<number | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressHandledRef = useRef(false)
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
 
   const formattedDateTime = formatBadgeAlmatyFix(lead.createdAt)
   const cityLabel = lead.city || 'Город не указан'
@@ -29,25 +31,47 @@ const LeadListItem = ({ lead, onClick, pendingSync }: LeadListItemProps) => {
 
   const clearLongPressTimer = useCallback(() => {
     if (longPressTimerRef.current !== null) {
-      window.clearTimeout(longPressTimerRef.current)
+      clearTimeout(longPressTimerRef.current)
       longPressTimerRef.current = null
     }
+    pointerStartRef.current = null
   }, [])
 
-  const handlePointerDown = useCallback(() => {
-    longPressHandledRef.current = false
-    longPressTimerRef.current = window.setTimeout(() => {
-      longPressTimerRef.current = null
-      longPressHandledRef.current = true
-      setMenuOpen(true)
-    }, LONG_PRESS_MS)
-  }, [])
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return
+      pointerStartRef.current = { x: e.clientX, y: e.clientY }
+      longPressHandledRef.current = false
+      const target = e.currentTarget
+      target.setPointerCapture?.(e.pointerId)
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTimerRef.current = null
+        pointerStartRef.current = null
+        longPressHandledRef.current = true
+        setMenuOpen(true)
+      }, LONG_PRESS_MS)
+    },
+    [],
+  )
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      const start = pointerStartRef.current
+      if (!start) return
+      const dx = e.clientX - start.x
+      const dy = e.clientY - start.y
+      if (Math.abs(dx) > MOVE_THRESHOLD_PX || Math.abs(dy) > MOVE_THRESHOLD_PX) {
+        clearLongPressTimer()
+      }
+    },
+    [clearLongPressTimer],
+  )
 
   const handlePointerUp = useCallback(() => {
     clearLongPressTimer()
   }, [clearLongPressTimer])
 
-  const handlePointerLeave = useCallback(() => {
+  const handlePointerCancel = useCallback(() => {
     clearLongPressTimer()
   }, [clearLongPressTimer])
 
@@ -82,8 +106,10 @@ const LeadListItem = ({ lead, onClick, pendingSync }: LeadListItemProps) => {
         className={`lead-item lead-item--${lead.status}`}
         onClick={handleClick}
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerLeave}
+        onPointerLeave={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onContextMenu={(e) => e.preventDefault()}
       >
         <span className="lead-item__stripe" aria-hidden="true" />
