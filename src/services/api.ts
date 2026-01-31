@@ -392,7 +392,7 @@ export const getTenantWhatsapps = async (
   tenantId: string | number,
 ): Promise<TenantWhatsapp[]> => {
   const data = await request<unknown>(
-    `/api/admin/tenants/${tenantId}/whatsapps`,
+    `/api/admin/tenants/${tenantId}/whatsapp`,
     {
       method: 'GET',
       headers: { ...authHeaders() },
@@ -411,7 +411,7 @@ export const addTenantWhatsapp = async (
   },
 ) => {
   return request<unknown>(
-    `/api/admin/tenants/${tenantId}/whatsapps`,
+    `/api/admin/tenants/${tenantId}/whatsapp`,
     {
       method: 'POST',
       headers: {
