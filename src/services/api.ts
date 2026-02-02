@@ -543,6 +543,7 @@ export const createAdminTenant = async (payload: {
   })
 }
 
+/** PATCH tenant: only core fields (no WhatsApp binding). */
 export const updateAdminTenant = async (
   tenantId: string | number,
   payload: {
@@ -552,10 +553,6 @@ export const updateAdminTenant = async (
     is_active?: boolean
     ai_prompt?: string | null
     ai_enabled?: boolean
-    token?: string | null
-    instance_id?: string | null
-    phone_number?: string | null
-    whatsapp_active?: boolean
   },
 ) => {
   return request<unknown>(`/api/admin/tenants/${tenantId}`, {
@@ -566,6 +563,89 @@ export const updateAdminTenant = async (
     },
     body: JSON.stringify(payload),
   })
+}
+
+/** WhatsApp/ChatFlow binding for one tenant (single object). */
+export type TenantWhatsappBinding = {
+  token?: string | null
+  instance_id?: string | null
+  phone_number?: string | null
+  active?: boolean
+}
+
+const BINDING_404_MESSAGE =
+  'Не удалось сохранить привязку: endpoint отсутствует'
+
+/** GET binding: GET /api/admin/tenants/{id}/whatsapp. 404 → empty binding. */
+export const getTenantWhatsappBinding = async (
+  tenantId: string | number,
+): Promise<TenantWhatsappBinding> => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/whatsapp`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  if (response.status === 404) {
+    return { token: '', instance_id: '', phone_number: '', active: true }
+  }
+  if (!response.ok) throw await buildError(response)
+  const text = await response.text()
+  if (!text) return { token: '', instance_id: '', phone_number: '', active: true }
+  try {
+    const data = JSON.parse(text) as unknown
+    if (Array.isArray(data) && data.length > 0) {
+      const first = data[0] as Record<string, unknown>
+      return {
+        token: (first.token as string) ?? '',
+        instance_id: (first.instance_id as string) ?? '',
+        phone_number: (first.phone_number as string) ?? '',
+        active: (first.active as boolean) !== false,
+      }
+    }
+    const obj = data as Record<string, unknown>
+    return {
+      token: (obj.token as string) ?? '',
+      instance_id: (obj.instance_id as string) ?? '',
+      phone_number: (obj.phone_number as string) ?? '',
+      active: (obj.active as boolean) !== false,
+    }
+  } catch {
+    return { token: '', instance_id: '', phone_number: '', active: true }
+  }
+}
+
+/** PUT binding: PUT /api/admin/tenants/{id}/whatsapp. 404 → throw BINDING_404_MESSAGE. */
+export const putTenantWhatsappBinding = async (
+  tenantId: string | number,
+  payload: {
+    token?: string | null
+    instance_id?: string | null
+    phone_number?: string | null
+    active?: boolean
+  },
+) => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/whatsapp`)
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+  if (response.status === 404) {
+    const err = new Error(BINDING_404_MESSAGE) as ApiError
+    err.status = 404
+    throw err
+  }
+  if (!response.ok) throw await buildError(response)
+  const text = await response.text()
+  if (!text) return undefined
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return undefined
+  }
 }
 
 export const getTenantWhatsapps = async (

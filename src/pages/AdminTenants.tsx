@@ -6,6 +6,8 @@ import {
   addTenantUser,
   getAdminTenants,
   getTenantUsers,
+  getTenantWhatsappBinding,
+  putTenantWhatsappBinding,
   updateAdminTenant,
   type AdminTenant,
   type TenantUser,
@@ -41,6 +43,7 @@ const AdminTenants = () => {
   const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([])
   const [tenantUsersStatus, setTenantUsersStatus] = useState<'idle' | 'loading'>('idle')
   const [addUserForm, setAddUserForm] = useState({ email: '', role: 'manager' as 'manager' | 'admin' })
+  const [bindingLoading, setBindingLoading] = useState(false)
 
   const loadTenants = useCallback(async () => {
     setStatus('loading')
@@ -90,6 +93,21 @@ const AdminTenants = () => {
     })
     setEditOpen(true)
     setActionError(null)
+    setBindingLoading(true)
+    getTenantWhatsappBinding(tenant.id)
+      .then((b) => {
+        setEditForm((prev) => ({
+          ...prev,
+          token: (b.token ?? '').toString(),
+          instance_id: (b.instance_id ?? '').toString(),
+          phone_number: (b.phone_number ?? '').toString(),
+          whatsapp_active: b.active !== false,
+        }))
+      })
+      .catch(() => {
+        // keep form from tenant; binding load failed
+      })
+      .finally(() => setBindingLoading(false))
   }
 
   const handleAiToggle = async (tenant: AdminTenant, nextEnabled: boolean) => {
@@ -187,13 +205,23 @@ const AdminTenants = () => {
         is_active: activeTenant.is_active,
         ai_prompt: editForm.ai_prompt.trim() || null,
         ai_enabled: editForm.ai_enabled,
-        token: editForm.token.trim() || null,
-        instance_id: editForm.instance_id.trim() || null,
-        phone_number: editForm.phone_number.trim() || null,
-        whatsapp_active: editForm.whatsapp_active,
       })
-      closeEdit()
+      try {
+        await putTenantWhatsappBinding(activeTenant.id, {
+          token: editForm.token.trim() || null,
+          instance_id: editForm.instance_id.trim() || null,
+          phone_number: editForm.phone_number.trim() || null,
+          active: editForm.whatsapp_active,
+        })
+      } catch (bindErr) {
+        const msg = (bindErr as { message?: string })?.message || 'Не удалось сохранить привязку'
+        setActionError(msg)
+        await loadTenants()
+        setActionStatus('idle')
+        return
+      }
       await loadTenants()
+      closeEdit()
     } catch (err) {
       const apiError = err as { message?: string }
       setActionError(apiError?.message || 'Не удалось сохранить')
@@ -335,6 +363,9 @@ const AdminTenants = () => {
               <div className="dialog-text" style={{ marginTop: 12, marginBottom: 4 }}>
                 WhatsApp / ChatFlow привязка
               </div>
+              {bindingLoading && (
+                <div className="info-text" style={{ marginBottom: 8 }}>Загрузка привязки...</div>
+              )}
               <div className="settings-hint" style={{ marginBottom: 10 }}>
                 Для каждого клиента нужен свой instance_id (QR в ChatFlow) + token. Без них бот отвечать не будет.
               </div>
