@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Phone, MessageCircle, MapPin, FileText } from 'lucide-react'
+import { ArrowLeft, Phone, MessageCircle, MapPin, FileText, MessageSquare } from 'lucide-react'
 import { useLeads } from '../context/LeadsContext'
 import { sanitizePhoneForTel, sanitizePhoneForWa } from '../utils/phone'
 import ThreeDotsMenu from '../components/ThreeDotsMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { getCachedLeadById } from '../services/offlineDb'
+import { getLeadComments, postLeadComment, type LeadComment } from '../services/api'
+import { formatBadgeAlmatyFix } from '../utils/dateFormat'
 import type { NormalizedLead } from '../utils/normalizeLead'
 
 const LeadDetails = () => {
@@ -22,6 +25,10 @@ const LeadDetails = () => {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [comments, setComments] = useState<LeadComment[]>([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [commentSubmitting, setCommentSubmitting] = useState(false)
 
   useEffect(() => {
     const handleOffline = () => setIsOffline(true)
@@ -49,6 +56,27 @@ const LeadDetails = () => {
       active = false
     }
   }, [id, leadFromContext])
+
+  const loadComments = useCallback(async () => {
+    if (!id) return
+    setCommentsLoading(true)
+    try {
+      const list = await getLeadComments(id)
+      setComments(Array.isArray(list) ? list : [])
+    } catch {
+      setComments([])
+    } finally {
+      setCommentsLoading(false)
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (id && lead) {
+      loadComments()
+    } else {
+      setComments([])
+    }
+  }, [id, lead, loadComments])
 
   const phoneValue = lead?.phone?.trim() || ''
   const phoneTel = phoneValue ? sanitizePhoneForTel(phoneValue) : ''
@@ -112,6 +140,22 @@ const LeadDetails = () => {
 
   const handleBack = () => {
     navigate('/leads')
+  }
+
+  const handleAddComment = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!id || !commentText.trim()) return
+    setCommentSubmitting(true)
+    setActionError(null)
+    try {
+      const newComment = await postLeadComment(id, commentText.trim())
+      setComments((prev) => [newComment, ...prev])
+      setCommentText('')
+    } catch {
+      setActionError('Не удалось добавить комментарий')
+    } finally {
+      setCommentSubmitting(false)
+    }
   }
 
   return (
@@ -190,6 +234,52 @@ const LeadDetails = () => {
               </div>
             </div>
             <span className="details-section-chevron" aria-hidden="true">›</span>
+          </div>
+          <div className="details-section details-section--comments">
+            <div className="details-section-icon details-section-icon--blue">
+              <MessageSquare size={18} />
+            </div>
+            <div className="details-section-body details-section-body--full">
+              <div className="details-section-title">КОММЕНТАРИИ</div>
+              {commentsLoading ? (
+                <div className="info-text">Загрузка…</div>
+              ) : comments.length === 0 ? (
+                <div className="info-text">Комментариев пока нет</div>
+              ) : (
+                <ul className="comments-list">
+                  {comments.map((c) => (
+                    <li key={c.id} className="comment-item">
+                      <div className="comment-body">{c.body}</div>
+                      {(c.created_at || c.author) && (
+                        <div className="comment-meta">
+                          {c.author && <span>{c.author}</span>}
+                          {c.created_at && (
+                            <span>{formatBadgeAlmatyFix(c.created_at)}</span>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form className="comment-form" onSubmit={handleAddComment}>
+                <textarea
+                  className="comment-input"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Добавить комментарий…"
+                  rows={2}
+                  disabled={commentSubmitting}
+                />
+                <button
+                  className="primary-button comment-submit"
+                  type="submit"
+                  disabled={!commentText.trim() || commentSubmitting}
+                >
+                  {commentSubmitting ? 'Отправка…' : 'Добавить'}
+                </button>
+              </form>
+            </div>
           </div>
           <div className="details-sticky">
             <div className="details-actions">

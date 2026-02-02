@@ -1,8 +1,13 @@
 const fallbackApiUrl = 'https://crm-api-5vso.onrender.com'
 const fallbackWhatsApp = '+77768776637'
 
+/** Always without trailing slash to avoid double slashes in paths like /api/auth/login */
+function normalizeBaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, '')
+}
+
 const envApiUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
-export const BASE_URL = envApiUrl || fallbackApiUrl
+export const BASE_URL = normalizeBaseUrl(envApiUrl || fallbackApiUrl)
 
 /** True when PROD build and VITE_API_BASE_URL was not set (using fallback) */
 export const isEnvApiUrlMissing =

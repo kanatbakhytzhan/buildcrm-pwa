@@ -155,6 +155,21 @@ export const login = async (email: string, password: string) => {
   throw error
 }
 
+/** Change password (authenticated user). POST /api/auth/change-password */
+export const changePassword = async (payload: {
+  current_password: string
+  new_password: string
+}) => {
+  return request<unknown>('/api/auth/change-password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
 /** Health check for diagnostics (GET /api/health) */
 export const checkApiHealth = async (): Promise<{ ok: boolean; message: string }> => {
   const url = fullUrl('/api/health')
@@ -230,6 +245,58 @@ export const deleteLead = async (id: string) => {
   })
 }
 
+export type LeadComment = {
+  id: string | number
+  lead_id?: string | number
+  body: string
+  created_at?: string
+  author?: string
+}
+
+const extractLeadComments = (data: unknown): LeadComment[] => {
+  if (Array.isArray(data)) return data as LeadComment[]
+  const obj = data as { comments?: unknown[]; items?: unknown[]; data?: unknown[] }
+  if (Array.isArray(obj?.comments)) return obj.comments as LeadComment[]
+  if (Array.isArray(obj?.items)) return obj.items as LeadComment[]
+  if (Array.isArray(obj?.data)) return obj.data as LeadComment[]
+  return []
+}
+
+export const getLeadComments = async (leadId: string): Promise<LeadComment[]> => {
+  const url = fullUrl(`/api/leads/${leadId}/comments`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  if (response.status === 404) return []
+  if (!response.ok) throw await buildError(response)
+  const text = await response.text()
+  if (!text) return []
+  try {
+    const data = JSON.parse(text) as unknown
+    return extractLeadComments(data)
+  } catch {
+    return []
+  }
+}
+
+export const postLeadComment = async (
+  leadId: string,
+  body: string,
+): Promise<LeadComment> => {
+  const data = await request<unknown>(`/api/leads/${leadId}/comments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ body: body.trim() }),
+  })
+  const obj = data as Record<string, unknown>
+  const comment = (obj?.comment ?? obj?.data ?? obj) as LeadComment
+  return comment
+}
+
 export type AdminUser = {
   id: string | number
   email: string
@@ -290,18 +357,22 @@ export const updateAdminUser = async (
   })
 }
 
+/** Reset user password (admin). Backend returns temporary_password. */
 export const resetAdminUserPassword = async (
   id: string | number,
-  password: string,
-) => {
-  return request<unknown>(`/api/admin/users/${id}/reset-password`, {
+): Promise<{ temporary_password: string }> => {
+  const data = await request<unknown>(`/api/admin/users/${id}/reset-password`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders(),
     },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({}),
   })
+  const obj = (data ?? {}) as { temporary_password?: string; temp_password?: string }
+  const temporary_password =
+    obj.temporary_password ?? obj.temp_password ?? ''
+  return { temporary_password }
 }
 
 /* --- Admin Tenants --- */
@@ -312,6 +383,7 @@ export type AdminTenant = {
   slug: string
   is_active: boolean
   default_owner_user_id?: number | null
+  ai_prompt?: string | null
 }
 
 export type TenantWhatsapp = {
@@ -385,6 +457,7 @@ export const updateAdminTenant = async (
     slug?: string
     default_owner_user_id?: number | null
     is_active?: boolean
+    ai_prompt?: string | null
   },
 ) => {
   return request<unknown>(`/api/admin/tenants/${tenantId}`, {
@@ -453,4 +526,56 @@ export const deleteTenantWhatsapp = async (
       headers: { ...authHeaders() },
     },
   )
+}
+
+/* --- Tenant users (multi-user) --- */
+
+export type TenantUser = {
+  id: string | number
+  email: string
+  role?: 'manager' | 'admin'
+  created_at?: string
+}
+
+const extractTenantUsers = (data: unknown): TenantUser[] => {
+  if (Array.isArray(data)) return data as TenantUser[]
+  const obj = data as { users?: unknown[]; items?: unknown[]; data?: unknown[] }
+  if (Array.isArray(obj?.users)) return obj.users as TenantUser[]
+  if (Array.isArray(obj?.items)) return obj.items as TenantUser[]
+  if (Array.isArray(obj?.data)) return obj.data as TenantUser[]
+  return []
+}
+
+export const getTenantUsers = async (
+  tenantId: string | number,
+): Promise<TenantUser[]> => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/users`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  if (response.status === 404) return []
+  if (!response.ok) throw await buildError(response)
+  const text = await response.text()
+  if (!text) return []
+  try {
+    const data = JSON.parse(text) as unknown
+    return extractTenantUsers(data)
+  } catch {
+    return []
+  }
+}
+
+export const addTenantUser = async (
+  tenantId: string | number,
+  payload: { email: string; role?: 'manager' | 'admin' },
+) => {
+  return request<unknown>(`/api/admin/tenants/${tenantId}/users`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
 }

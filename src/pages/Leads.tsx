@@ -4,7 +4,6 @@ import { Loader2 } from 'lucide-react'
 import { useLeads } from '../context/LeadsContext'
 import SegmentTabs from '../components/SegmentTabs'
 import LeadListItem from '../components/LeadListItem'
-import Toast from '../components/Toast'
 
 type LeadStatusTab = 'new' | 'success' | 'failed'
 
@@ -20,8 +19,6 @@ const Leads = () => {
     isLoading,
     error,
     loadLeads,
-    toastMessage,
-    clearToast,
     pendingLeadIds,
   } = useLeads()
   const [activeTab, setActiveTab] = useState<LeadStatusTab>('new')
@@ -130,7 +127,6 @@ const Leads = () => {
           ))}
         </div>
       </div>
-      {toastMessage && <Toast message={toastMessage} onClose={clearToast} />}
     </div>
   )
 }

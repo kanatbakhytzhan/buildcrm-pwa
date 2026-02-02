@@ -2,7 +2,9 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Outlet } from 'react-router-dom'
 import BottomTabs from './components/BottomTabs'
 import OfflineBanner from './components/OfflineBanner'
+import Toast from './components/Toast'
 import { useAuth } from './context/AuthContext'
+import { useLeads } from './context/LeadsContext'
 import HotLeads from './pages/HotLeads'
 import LeadDetails from './pages/LeadDetails'
 import Leads from './pages/Leads'
@@ -13,12 +15,14 @@ import AdminUsers from './pages/AdminUsers'
 import AdminTenants from './pages/AdminTenants'
 
 const AppLayout = () => {
+  const { toastMessage, clearToast } = useLeads()
   return (
     <div className="app-shell">
       <OfflineBanner />
       <main className="app-content">
         <Outlet />
       </main>
+      {toastMessage && <Toast message={toastMessage} onClose={clearToast} />}
       <BottomTabs />
     </div>
   )

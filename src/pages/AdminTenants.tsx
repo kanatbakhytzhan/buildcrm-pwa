@@ -3,13 +3,16 @@ import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
+  addTenantUser,
   addTenantWhatsapp,
   createAdminTenant,
   deleteTenantWhatsapp,
   getAdminTenants,
+  getTenantUsers,
   getTenantWhatsapps,
   updateAdminTenant,
   type AdminTenant,
+  type TenantUser,
   type TenantWhatsapp,
 } from '../services/api'
 
@@ -23,6 +26,7 @@ const AdminTenants = () => {
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [whatsappOpen, setWhatsappOpen] = useState(false)
+  const [usersOpen, setUsersOpen] = useState(false)
   const [activeTenant, setActiveTenant] = useState<AdminTenant | null>(null)
 
   const [actionStatus, setActionStatus] = useState<'idle' | 'loading'>('idle')
@@ -39,6 +43,7 @@ const AdminTenants = () => {
     slug: '',
     default_owner_user_id: '' as string | number,
     is_active: true,
+    ai_prompt: '',
   })
 
   const [whatsapps, setWhatsapps] = useState<TenantWhatsapp[]>([])
@@ -50,6 +55,10 @@ const AdminTenants = () => {
     verify_token: '',
     waba_id: '',
   })
+
+  const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([])
+  const [tenantUsersStatus, setTenantUsersStatus] = useState<'idle' | 'loading'>('idle')
+  const [addUserForm, setAddUserForm] = useState({ email: '', role: 'manager' as 'manager' | 'admin' })
 
   const loadTenants = useCallback(async () => {
     setStatus('loading')
@@ -78,14 +87,15 @@ const AdminTenants = () => {
   useEffect(() => {
     const onEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (whatsappOpen) closeWhatsapp()
+        if (usersOpen) closeUsers()
+        else if (whatsappOpen) closeWhatsapp()
         else if (editOpen) closeEdit()
         else if (createOpen) closeCreate()
       }
     }
     window.addEventListener('keydown', onEscape)
     return () => window.removeEventListener('keydown', onEscape)
-  }, [createOpen, editOpen, whatsappOpen])
+  }, [createOpen, editOpen, whatsappOpen, usersOpen])
 
   const loadWhatsapps = useCallback(
     async (tenantId: string | number) => {
@@ -122,6 +132,7 @@ const AdminTenants = () => {
       slug: tenant.slug,
       default_owner_user_id: tenant.default_owner_user_id ?? '',
       is_active: tenant.is_active,
+      ai_prompt: tenant.ai_prompt ?? '',
     })
     setEditOpen(true)
     setActionError(null)
@@ -136,6 +147,52 @@ const AdminTenants = () => {
   const closeWhatsapp = () => {
     setWhatsappOpen(false)
     setActiveTenant(null)
+  }
+
+  const loadTenantUsers = useCallback(async (tenantId: string | number) => {
+    setTenantUsersStatus('loading')
+    try {
+      const list = await getTenantUsers(tenantId)
+      setTenantUsers(list)
+    } catch {
+      setTenantUsers([])
+    } finally {
+      setTenantUsersStatus('idle')
+    }
+  }, [])
+
+  const openUsers = (tenant: AdminTenant) => {
+    setActiveTenant(tenant)
+    setUsersOpen(true)
+    setAddUserForm({ email: '', role: 'manager' })
+    setActionError(null)
+    loadTenantUsers(tenant.id)
+  }
+
+  const closeUsers = () => {
+    setUsersOpen(false)
+    setActiveTenant(null)
+    setTenantUsers([])
+  }
+
+  const handleAddUserSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!activeTenant) return
+    setActionStatus('loading')
+    setActionError(null)
+    try {
+      await addTenantUser(activeTenant.id, {
+        email: addUserForm.email.trim(),
+        role: addUserForm.role,
+      })
+      setAddUserForm({ email: '', role: 'manager' })
+      await loadTenantUsers(activeTenant.id)
+    } catch (err) {
+      const apiError = err as { status?: number; message?: string }
+      setActionError(apiError?.message || 'Не удалось добавить пользователя')
+    } finally {
+      setActionStatus('idle')
+    }
   }
 
   const handleCreateSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -174,6 +231,7 @@ const AdminTenants = () => {
           ? Number(editForm.default_owner_user_id)
           : null,
         is_active: editForm.is_active,
+        ai_prompt: editForm.ai_prompt.trim() || null,
       })
       closeEdit()
       await loadTenants()
@@ -309,6 +367,13 @@ const AdminTenants = () => {
               >
                 WhatsApp номера
               </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => openUsers(t)}
+              >
+                Пользователи
+              </button>
             </div>
           </div>
         ))}
@@ -432,6 +497,18 @@ const AdminTenants = () => {
                   }
                 />
               </label>
+              <label className="field">
+                <span className="field-label">AI инструкция (prompt)</span>
+                <textarea
+                  className="field-input field-input--textarea"
+                  value={editForm.ai_prompt}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, ai_prompt: e.target.value }))
+                  }
+                  placeholder="Инструкция для AI по этому клиенту"
+                  rows={4}
+                />
+              </label>
               <label className="field toggle-row">
                 <span className="field-label">Активен</span>
                 <input
@@ -461,6 +538,83 @@ const AdminTenants = () => {
       )}
 
       {/* WhatsApp numbers modal */}
+      {/* Tenant users modal */}
+      {usersOpen && activeTenant && (
+        <div className="dialog-backdrop" onClick={closeUsers}>
+          <div
+            className="dialog admin-dialog-wide"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="dialog-title">
+              Пользователи — {activeTenant.name}
+            </div>
+            {tenantUsersStatus === 'loading' ? (
+              <div className="info-text">Загрузка...</div>
+            ) : tenantUsers.length === 0 ? (
+              <div className="info-text">Пользователей пока нет</div>
+            ) : (
+              <div className="admin-whatsapp-list">
+                {tenantUsers.map((u) => (
+                  <div className="card admin-whatsapp-row" key={u.id}>
+                    <div>
+                      <div className="toggle-title">{u.email}</div>
+                      <div className="toggle-subtitle">
+                        {u.role === 'admin' ? 'Админ' : 'Менеджер'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="dialog-text">Добавить пользователя</div>
+            <form className="form-grid" onSubmit={handleAddUserSubmit}>
+              <label className="field">
+                <span className="field-label">Email</span>
+                <input
+                  className="field-input"
+                  type="email"
+                  value={addUserForm.email}
+                  onChange={(e) =>
+                    setAddUserForm((p) => ({ ...p, email: e.target.value }))
+                  }
+                  placeholder="user@company.ru"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Роль</span>
+                <select
+                  className="field-input"
+                  value={addUserForm.role}
+                  onChange={(e) =>
+                    setAddUserForm((p) => ({
+                      ...p,
+                      role: e.target.value as 'manager' | 'admin',
+                    }))
+                  }
+                >
+                  <option value="manager">Менеджер</option>
+                  <option value="admin">Админ</option>
+                </select>
+              </label>
+              {actionError && <div className="error-text">{actionError}</div>}
+              <div className="dialog-actions">
+                <button className="ghost-button" type="button" onClick={closeUsers}>
+                  Закрыть
+                </button>
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={actionStatus === 'loading'}
+                >
+                  {actionStatus === 'loading' ? 'Добавляю...' : 'Добавить'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {whatsappOpen && activeTenant && (
         <div className="dialog-backdrop" onClick={closeWhatsapp}>
           <div

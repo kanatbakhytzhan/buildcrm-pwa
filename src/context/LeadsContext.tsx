@@ -19,6 +19,7 @@ export type LeadsContextValue = {
   deleteLead: (id: string) => Promise<void>
   syncOutbox: () => Promise<void>
   clearToast: () => void
+  showToast: (message: string) => void
 }
 
 export const LeadsContext = createContext<LeadsContextValue | undefined>(undefined)

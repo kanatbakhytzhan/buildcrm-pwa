@@ -19,6 +19,8 @@ const AdminUsers = () => {
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
+  const [resetResultOpen, setResetResultOpen] = useState(false)
+  const [tempPassword, setTempPassword] = useState('')
   const [activeUser, setActiveUser] = useState<AdminUser | null>(null)
   const [busyUserId, setBusyUserId] = useState<string | number | null>(null)
   const [actionStatus, setActionStatus] = useState<'idle' | 'loading'>('idle')
@@ -28,7 +30,6 @@ const AdminUsers = () => {
     password: '',
     companyName: '',
   })
-  const [resetPassword, setResetPassword] = useState('')
 
   const loadUsers = useCallback(async () => {
     setStatus('loading')
@@ -70,8 +71,19 @@ const AdminUsers = () => {
   const closeReset = () => {
     setResetOpen(false)
     setActiveUser(null)
-    setResetPassword('')
     setActionError(null)
+  }
+
+  const closeResetResult = () => {
+    setResetResultOpen(false)
+    setTempPassword('')
+    setActiveUser(null)
+  }
+
+  const copyTempPassword = () => {
+    if (tempPassword) {
+      navigator.clipboard.writeText(tempPassword).catch(() => {})
+    }
   }
 
   const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -98,22 +110,21 @@ const AdminUsers = () => {
     }
   }
 
-  const handleResetSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!activeUser) {
-      return
-    }
+  const handleResetConfirm = async () => {
+    if (!activeUser) return
     setActionStatus('loading')
     setActionError(null)
     try {
-      await resetAdminUserPassword(activeUser.id, resetPassword)
+      const { temporary_password } = await resetAdminUserPassword(activeUser.id)
       closeReset()
+      setTempPassword(temporary_password)
+      setResetResultOpen(true)
     } catch (err) {
       const apiError = err as { status?: number; message?: string }
       if (err instanceof TypeError) {
         setActionError('Ошибка сети')
       } else {
-        setActionError(apiError?.message || 'Не удалось обновить пароль')
+        setActionError(apiError?.message || 'Не удалось сбросить пароль')
       }
     } finally {
       setActionStatus('idle')
@@ -144,7 +155,6 @@ const AdminUsers = () => {
 
   const handleOpenReset = (user: AdminUser) => {
     setActiveUser(user)
-    setResetPassword('')
     setResetOpen(true)
     setActionError(null)
   }
@@ -311,36 +321,55 @@ const AdminUsers = () => {
       )}
 
       {resetOpen && activeUser && (
-        <div className="dialog-backdrop">
-          <div className="dialog">
+        <div className="dialog-backdrop" onClick={closeReset}>
+          <div className="dialog" onClick={(e) => e.stopPropagation()}>
             <div className="dialog-title">Сбросить пароль</div>
-            <div className="dialog-text">{activeUser.email}</div>
-            <form className="form-grid" onSubmit={handleResetSubmit}>
-              <label className="field">
-                <span className="field-label">Новый пароль</span>
-                <input
-                  className="field-input"
-                  type="password"
-                  value={resetPassword}
-                  onChange={(event) => setResetPassword(event.target.value)}
-                  placeholder="Введите новый пароль"
-                  required
-                />
-              </label>
-              {actionError && <div className="error-text">{actionError}</div>}
-              <div className="dialog-actions">
-                <button className="ghost-button" type="button" onClick={closeReset}>
-                  Отмена
-                </button>
+            <div className="dialog-text">
+              Сгенерировать временный пароль для {activeUser.email}?
+            </div>
+            {actionError && <div className="error-text">{actionError}</div>}
+            <div className="dialog-actions">
+              <button className="ghost-button" type="button" onClick={closeReset}>
+                Отмена
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={handleResetConfirm}
+                disabled={actionStatus === 'loading'}
+              >
+                {actionStatus === 'loading' ? 'Сбрасываю...' : 'Сбросить пароль'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resetResultOpen && tempPassword && (
+        <div className="dialog-backdrop" onClick={closeResetResult}>
+          <div className="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-title">Временный пароль</div>
+            <div className="dialog-text warning-text">
+              Сохраните пароль сейчас, потом не покажется.
+            </div>
+            <div className="field">
+              <span className="field-label">Пароль</span>
+              <div className="temp-password-row">
+                <code className="temp-password-value">{tempPassword}</code>
                 <button
-                  className="primary-button"
-                  type="submit"
-                  disabled={actionStatus === 'loading'}
+                  className="secondary-button"
+                  type="button"
+                  onClick={copyTempPassword}
                 >
-                  {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить'}
+                  Копировать
                 </button>
               </div>
-            </form>
+            </div>
+            <div className="dialog-actions">
+              <button className="primary-button" type="button" onClick={closeResetResult}>
+                Закрыть
+              </button>
+            </div>
           </div>
         </div>
       )}

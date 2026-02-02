@@ -6,6 +6,8 @@ export type NormalizedLead = {
   request: string
   createdAt: string
   status: 'new' | 'success' | 'failed'
+  comments_count?: number
+  last_comment?: string
 }
 
 const unwrapStatusValue = (value: unknown) => {
@@ -108,6 +110,14 @@ export const normalizeLead = (raw: Record<string, unknown>): NormalizedLead => {
       .toLocaleString('sv-SE', { timeZone: 'Asia/Almaty' })
       .replace(' ', 'T')
   const status = normalizeLeadStatus(raw.status ?? 'new')
+  const comments_count =
+    typeof raw.comments_count === 'number'
+      ? raw.comments_count
+      : typeof raw.comments_count === 'string'
+        ? parseInt(raw.comments_count, 10)
+        : undefined
+  const last_comment =
+    typeof raw.last_comment === 'string' ? raw.last_comment : undefined
 
   return {
     id,
@@ -117,5 +127,9 @@ export const normalizeLead = (raw: Record<string, unknown>): NormalizedLead => {
     request,
     createdAt,
     status,
+    ...(comments_count !== undefined && !Number.isNaN(comments_count)
+      ? { comments_count }
+      : {}),
+    ...(last_comment ? { last_comment } : {}),
   }
 }

@@ -281,6 +281,7 @@ export const LeadsProvider = ({ children }: { children: ReactNode }) => {
       deleteLead,
       syncOutbox: runSync,
       clearToast,
+      showToast,
     }),
     [
       leads,
@@ -297,6 +298,7 @@ export const LeadsProvider = ({ children }: { children: ReactNode }) => {
       deleteLead,
       runSync,
       clearToast,
+      showToast,
     ],
   )
 

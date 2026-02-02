@@ -36,7 +36,7 @@ In the Vercel project: **Settings** → **Environment Variables**. Add:
 
 | Name | Value | Notes |
 |------|--------|------|
-| `VITE_API_BASE_URL` | `https://crm-api-5vso.onrender.com` | API base URL (required for all requests). |
+| `VITE_API_BASE_URL` | `https://crm-api-5vso.onrender.com` | API base URL, **without trailing slash** (required for all requests). |
 | `VITE_SUPPORT_WHATSAPP` | `+77768776637` | Optional; used for “Contact us” / support links if you read it from config. |
 
 - Apply to **Production**, **Preview**, and **Development** as needed.

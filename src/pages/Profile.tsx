@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Flame, MessageCircle, RefreshCw, LogOut, ChevronRight } from 'lucide-react'
+import { Bell, Flame, MessageCircle, RefreshCw, LogOut, ChevronRight, Lock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../context/LeadsContext'
+import { changePassword } from '../services/api'
 
 const NOTIFICATIONS_KEY = 'buildcrm_notifications_enabled'
 const PROFILE_EMAIL_KEY = 'buildcrm_profile_email'
@@ -12,7 +13,15 @@ const PROFILE_COMPANY_KEY = 'buildcrm_profile_company'
 const Profile = () => {
   const navigate = useNavigate()
   const { logout } = useAuth()
-  const { outboxCount, syncOutbox } = useLeads()
+  const { outboxCount, syncOutbox, showToast } = useLeads()
+  const [changePwdOpen, setChangePwdOpen] = useState(false)
+  const [changePwdForm, setChangePwdForm] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: '',
+  })
+  const [changePwdLoading, setChangePwdLoading] = useState(false)
+  const [changePwdError, setChangePwdError] = useState<string | null>(null)
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     const stored = localStorage.getItem(NOTIFICATIONS_KEY)
     return stored === null ? true : stored === 'true'
@@ -46,6 +55,39 @@ const Profile = () => {
 
   const handleSupport = () => {
     window.location.href = 'https://wa.me/77768776637'
+  }
+
+  const closeChangePwd = () => {
+    setChangePwdOpen(false)
+    setChangePwdForm({ current_password: '', new_password: '', confirm_password: '' })
+    setChangePwdError(null)
+  }
+
+  const handleChangePwdSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setChangePwdError(null)
+    if (changePwdForm.new_password !== changePwdForm.confirm_password) {
+      setChangePwdError('Новый пароль и подтверждение не совпадают')
+      return
+    }
+    if (changePwdForm.new_password.length < 6) {
+      setChangePwdError('Новый пароль не менее 6 символов')
+      return
+    }
+    setChangePwdLoading(true)
+    try {
+      await changePassword({
+        current_password: changePwdForm.current_password,
+        new_password: changePwdForm.new_password,
+      })
+      showToast('Пароль изменён')
+      closeChangePwd()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Не удалось сменить пароль'
+      setChangePwdError(msg)
+    } finally {
+      setChangePwdLoading(false)
+    }
   }
 
   return (
@@ -120,6 +162,22 @@ const Profile = () => {
           </div>
           <ChevronRight size={20} className="settings-chevron" />
         </button>
+        <button
+          className="settings-row settings-row--tap"
+          type="button"
+          onClick={() => setChangePwdOpen(true)}
+        >
+          <div className="settings-left">
+            <div className="settings-icon settings-icon--primary" aria-hidden="true">
+              <Lock size={20} />
+            </div>
+            <div className="settings-text">
+              <div className="settings-title">Сменить пароль</div>
+              <div className="settings-hint">Текущий и новый пароль</div>
+            </div>
+          </div>
+          <ChevronRight size={20} className="settings-chevron" />
+        </button>
       </div>
       {outboxCount > 0 && (
         <button
@@ -138,6 +196,68 @@ const Profile = () => {
         <LogOut size={20} className="logout-icon" aria-hidden="true" />
         Выйти из аккаунта
       </button>
+
+      {changePwdOpen && (
+        <div className="dialog-backdrop" onClick={closeChangePwd}>
+          <div className="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-title">Сменить пароль</div>
+            <form className="form-grid" onSubmit={handleChangePwdSubmit}>
+              <label className="field">
+                <span className="field-label">Текущий пароль</span>
+                <input
+                  className="field-input"
+                  type="password"
+                  value={changePwdForm.current_password}
+                  onChange={(e) =>
+                    setChangePwdForm((p) => ({ ...p, current_password: e.target.value }))
+                  }
+                  placeholder="Введите текущий пароль"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Новый пароль</span>
+                <input
+                  className="field-input"
+                  type="password"
+                  value={changePwdForm.new_password}
+                  onChange={(e) =>
+                    setChangePwdForm((p) => ({ ...p, new_password: e.target.value }))
+                  }
+                  placeholder="Введите новый пароль"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Подтверждение пароля</span>
+                <input
+                  className="field-input"
+                  type="password"
+                  value={changePwdForm.confirm_password}
+                  onChange={(e) =>
+                    setChangePwdForm((p) => ({ ...p, confirm_password: e.target.value }))
+                  }
+                  placeholder="Повторите новый пароль"
+                  required
+                />
+              </label>
+              {changePwdError && <div className="error-text">{changePwdError}</div>}
+              <div className="dialog-actions">
+                <button className="ghost-button" type="button" onClick={closeChangePwd}>
+                  Отмена
+                </button>
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={changePwdLoading}
+                >
+                  {changePwdLoading ? 'Сохраняю…' : 'Сменить пароль'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

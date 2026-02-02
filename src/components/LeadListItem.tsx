@@ -124,6 +124,13 @@ const LeadListItem = ({ lead, onClick, pendingSync }: LeadListItemProps) => {
           <div className="lead-item__request">
             {lead.request || 'Без описания'}
           </div>
+          {(lead.last_comment != null || (lead.comments_count != null && lead.comments_count > 0)) && (
+            <div className="lead-item__comments-hint">
+              {lead.last_comment
+                ? (lead.last_comment.length > 40 ? `${lead.last_comment.slice(0, 40)}…` : lead.last_comment)
+                : `Комментариев: ${lead.comments_count}`}
+            </div>
+          )}
         </div>
         <div className="lead-item__side">
           <div className="lead-item__badge">{formattedDateTime}</div>
