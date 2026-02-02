@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Bot, MessageCircle, MapPin, FileText, MessageSquare, Phone } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../context/LeadsContext'
 import { sanitizePhoneForTel, sanitizePhoneForWa } from '../utils/phone'
 import ThreeDotsMenu from '../components/ThreeDotsMenu'
@@ -17,9 +18,13 @@ import {
 import { formatBadgeAlmatyFix } from '../utils/dateFormat'
 import type { NormalizedLead } from '../utils/normalizeLead'
 
+const AI_MUTE_NO_TENANT_MESSAGE =
+  'У этого лида не указан клиент (tenant). Сначала привяжите лид к клиенту или выполните исправление в админ-диагностике.'
+
 const LeadDetails = () => {
   const { id = '' } = useParams()
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
   const { getLeadById, updateLeadStatus, deleteLead, showToast, updateLeadInState } = useLeads()
   const leadFromContext = id ? getLeadById(id) : undefined
   const [cachedLead, setCachedLead] = useState<NormalizedLead | null>(null)
@@ -39,6 +44,8 @@ const LeadDetails = () => {
   const [aiEnabledGlobal, setAiEnabledGlobal] = useState(true)
   const [aiChatLoading, setAiChatLoading] = useState(false)
   const [aiChatStatusLoading, setAiChatStatusLoading] = useState(false)
+  const [aiMuteError, setAiMuteError] = useState<string | null>(null)
+  const [leadHasNoTenantId, setLeadHasNoTenantId] = useState(false)
 
   useEffect(() => {
     const handleOffline = () => setIsOffline(true)
@@ -105,16 +112,40 @@ const LeadDetails = () => {
 
   const handleAiChatToggle = async (muted: boolean) => {
     if (!id) return
+    setAiMuteError(null)
     setAiChatLoading(true)
     try {
       await postLeadAiMute(id, { muted })
       setAiMutedInChat(muted)
+      setLeadHasNoTenantId(false)
       showToast('Готово')
-    } catch {
-      showToast('Не удалось изменить')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const isNoTenant =
+        /Lead has no tenant_id|no tenant_id|cannot set per-chat mute/i.test(msg)
+      if (isNoTenant) {
+        setAiMuteError(AI_MUTE_NO_TENANT_MESSAGE)
+        setLeadHasNoTenantId(true)
+      } else {
+        showToast('Не удалось изменить')
+      }
     } finally {
       setAiChatLoading(false)
     }
+  }
+
+  const handleAiMuteRetry = () => {
+    setAiMuteError(null)
+    setLeadHasNoTenantId(false)
+    if (!id) return
+    setAiChatStatusLoading(true)
+    getLeadAiStatus(id)
+      .then((res) => {
+        setAiMutedInChat(res.ai_muted_in_chat === true)
+        setAiEnabledGlobal(res.ai_enabled_global !== false)
+      })
+      .catch(() => {})
+      .finally(() => setAiChatStatusLoading(false))
   }
 
   const phoneValue = lead?.phone?.trim() || ''
@@ -270,6 +301,11 @@ const LeadDetails = () => {
             </button>
           </div>
           {phoneMissing && <div className="info-text">Телефон не указан</div>}
+          {isAdmin && leadHasNoTenantId && (
+            <div className="info-text" style={{ color: 'var(--danger)', marginBottom: 8 }}>
+              tenant_id: отсутствует
+            </div>
+          )}
           <div className="details-section details-section--with-icon">
             <div className="details-section-icon details-section-icon--blue">
               <MapPin size={18} />
@@ -371,6 +407,19 @@ const LeadDetails = () => {
                 </span>
               </label>
             </div>
+            {aiMuteError && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                <div className="error-text" style={{ marginBottom: 8 }}>{aiMuteError}</div>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={handleAiMuteRetry}
+                  disabled={aiChatStatusLoading}
+                >
+                  {aiChatStatusLoading ? 'Загрузка…' : 'Обновить'}
+                </button>
+              </div>
+            )}
           </div>
           <div className="details-sticky">
             <div className="details-actions">
