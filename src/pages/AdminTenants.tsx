@@ -45,7 +45,12 @@ const AdminTenants = () => {
     is_active: true,
     ai_prompt: '',
     ai_enabled: true,
+    token: '',
+    instance_id: '',
+    phone_number: '',
+    whatsapp_active: true,
   })
+  const [tenantUsersError, setTenantUsersError] = useState<string | null>(null)
   const [aiToggleLoading, setAiToggleLoading] = useState(false)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
 
@@ -137,6 +142,10 @@ const AdminTenants = () => {
       is_active: tenant.is_active,
       ai_prompt: tenant.ai_prompt ?? '',
       ai_enabled: tenant.ai_enabled !== false,
+      token: tenant.token ?? '',
+      instance_id: tenant.instance_id ?? '',
+      phone_number: tenant.phone_number ?? '',
+      whatsapp_active: tenant.whatsapp_active !== false,
     })
     setEditOpen(true)
     setActionError(null)
@@ -181,11 +190,14 @@ const AdminTenants = () => {
 
   const loadTenantUsers = useCallback(async (tenantId: string | number) => {
     setTenantUsersStatus('loading')
+    setTenantUsersError(null)
     try {
       const list = await getTenantUsers(tenantId)
       setTenantUsers(list)
-    } catch {
+    } catch (err) {
       setTenantUsers([])
+      const msg = err instanceof Error ? err.message : 'Не удалось загрузить пользователей'
+      setTenantUsersError(msg)
     } finally {
       setTenantUsersStatus('idle')
     }
@@ -203,6 +215,7 @@ const AdminTenants = () => {
     setUsersOpen(false)
     setActiveTenant(null)
     setTenantUsers([])
+    setTenantUsersError(null)
   }
 
   const handleAddUserSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -263,6 +276,10 @@ const AdminTenants = () => {
         is_active: editForm.is_active,
         ai_prompt: editForm.ai_prompt.trim() || null,
         ai_enabled: editForm.ai_enabled,
+        token: editForm.token.trim() || null,
+        instance_id: editForm.instance_id.trim() || null,
+        phone_number: editForm.phone_number.trim() || null,
+        whatsapp_active: editForm.whatsapp_active,
       })
       closeEdit()
       await loadTenants()
@@ -487,7 +504,7 @@ const AdminTenants = () => {
       {/* Edit tenant modal */}
       {editOpen && activeTenant && (
         <div className="dialog-backdrop" onClick={closeEdit}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()}>
+          <div className="dialog admin-dialog-wide" onClick={(e) => e.stopPropagation()}>
             <div className="dialog-title">Редактировать клиента</div>
             <form className="form-grid" onSubmit={handleEditSubmit}>
               <label className="field">
@@ -564,6 +581,58 @@ const AdminTenants = () => {
               {savedMessage && (
                 <div className="info-text" style={{ color: 'var(--success)' }}>{savedMessage}</div>
               )}
+              <div className="dialog-text" style={{ marginTop: 12, marginBottom: 4 }}>
+                WhatsApp / ChatFlow привязка
+              </div>
+              <div className="settings-hint" style={{ marginBottom: 10 }}>
+                Для каждого клиента нужен свой instance_id (QR в ChatFlow) + token. Эти данные сохраняются тут, чтобы бот отвечал и лиды шли в нужную компанию.
+              </div>
+              <label className="field">
+                <span className="field-label">token</span>
+                <input
+                  className="field-input"
+                  type="text"
+                  value={editForm.token}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, token: e.target.value }))
+                  }
+                  placeholder="ChatFlow token"
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">instance_id</span>
+                <input
+                  className="field-input"
+                  type="text"
+                  value={editForm.instance_id}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, instance_id: e.target.value }))
+                  }
+                  placeholder="ID инстанса (QR в ChatFlow)"
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">phone_number</span>
+                <input
+                  className="field-input"
+                  type="text"
+                  value={editForm.phone_number}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, phone_number: e.target.value }))
+                  }
+                  placeholder="+77001234567"
+                />
+              </label>
+              <label className="field toggle-row">
+                <span className="field-label">active</span>
+                <input
+                  type="checkbox"
+                  checked={editForm.whatsapp_active}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, whatsapp_active: e.target.checked }))
+                  }
+                />
+              </label>
               <label className="field toggle-row">
                 <span className="field-label">Активен</span>
                 <input
@@ -603,11 +672,16 @@ const AdminTenants = () => {
             <div className="dialog-title">
               Пользователи — {activeTenant.name}
             </div>
+            {tenantUsersError && (
+              <div className="error-text" style={{ marginBottom: 12 }}>
+                {tenantUsersError}
+              </div>
+            )}
             {tenantUsersStatus === 'loading' ? (
               <div className="info-text">Загрузка...</div>
-            ) : tenantUsers.length === 0 ? (
+            ) : tenantUsers.length === 0 && !tenantUsersError ? (
               <div className="info-text">Пользователей пока нет</div>
-            ) : (
+            ) : tenantUsers.length > 0 ? (
               <div className="admin-whatsapp-list">
                 {tenantUsers.map((u) => (
                   <div className="card admin-whatsapp-row" key={u.id}>
@@ -620,7 +694,7 @@ const AdminTenants = () => {
                   </div>
                 ))}
               </div>
-            )}
+            ) : null}
             <div className="dialog-text">Добавить пользователя</div>
             <form className="form-grid" onSubmit={handleAddUserSubmit}>
               <label className="field">

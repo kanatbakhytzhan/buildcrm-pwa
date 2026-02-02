@@ -472,6 +472,11 @@ export type AdminTenant = {
   default_owner_user_id?: number | null
   ai_prompt?: string | null
   ai_enabled?: boolean
+  /** ChatFlow / WhatsApp binding */
+  token?: string | null
+  instance_id?: string | null
+  phone_number?: string | null
+  whatsapp_active?: boolean
 }
 
 export type TenantWhatsapp = {
@@ -547,6 +552,10 @@ export const updateAdminTenant = async (
     is_active?: boolean
     ai_prompt?: string | null
     ai_enabled?: boolean
+    token?: string | null
+    instance_id?: string | null
+    phone_number?: string | null
+    whatsapp_active?: boolean
   },
 ) => {
   return request<unknown>(`/api/admin/tenants/${tenantId}`, {
@@ -635,6 +644,9 @@ const extractTenantUsers = (data: unknown): TenantUser[] => {
   return []
 }
 
+const TENANT_USERS_404_MESSAGE =
+  'Эндпоинт не найден. Проверь, что бэк обновлён и есть /api/admin/tenants/:id/users'
+
 export const getTenantUsers = async (
   tenantId: string | number,
 ): Promise<TenantUser[]> => {
@@ -643,7 +655,11 @@ export const getTenantUsers = async (
     method: 'GET',
     headers: { ...authHeaders() },
   })
-  if (response.status === 404) return []
+  if (response.status === 404) {
+    const err = new Error(TENANT_USERS_404_MESSAGE) as Error & { status?: number }
+    err.status = 404
+    throw err
+  }
   if (!response.ok) throw await buildError(response)
   const text = await response.text()
   if (!text) return []
