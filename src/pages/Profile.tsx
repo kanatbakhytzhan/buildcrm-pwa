@@ -25,7 +25,7 @@ function outboxMethodUrl(entry: OutboxEntry): string {
 
 const Profile = () => {
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { logout, isAdmin } = useAuth()
   const {
     outboxCount,
     syncOutbox,
@@ -242,43 +242,47 @@ const Profile = () => {
           <ChevronRight size={20} className="settings-chevron" />
         </button>
       </div>
-      <button
-        className="settings-row settings-row--tap"
-        type="button"
-        onClick={() => setOutboxOpen(true)}
-      >
-        <div className="settings-left">
-          <div className="settings-icon settings-icon--primary" aria-hidden="true">
-            <Inbox size={20} />
-          </div>
-          <div className="settings-text">
-            <div className="settings-title">Очередь изменений</div>
-            <div className="settings-hint">
-              {outboxCount > 0 ? `В очереди: ${outboxCount} действий` : 'Просмотр и отправка'}
+      {isAdmin && (
+        <>
+          <button
+            className="settings-row settings-row--tap"
+            type="button"
+            onClick={() => setOutboxOpen(true)}
+          >
+            <div className="settings-left">
+              <div className="settings-icon settings-icon--primary" aria-hidden="true">
+                <Inbox size={20} />
+              </div>
+              <div className="settings-text">
+                <div className="settings-title">Очередь изменений</div>
+                <div className="settings-hint">
+                  {outboxCount > 0 ? `В очереди: ${outboxCount} действий` : 'Просмотр и отправка'}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <ChevronRight size={20} className="settings-chevron" />
-      </button>
-      {outboxCount > 0 && (
-        <button
-          className="sync-outbox-block"
-          type="button"
-          onClick={syncOutbox}
-        >
-          <RefreshCw size={20} className="sync-outbox-icon" aria-hidden="true" />
-          <div className="sync-outbox-text">
-            <span className="sync-outbox-title">Отправить изменения</span>
-            <span className="sync-outbox-hint">В очереди: {outboxCount} действий</span>
-          </div>
-        </button>
+            <ChevronRight size={20} className="settings-chevron" />
+          </button>
+          {outboxCount > 0 && (
+            <button
+              className="sync-outbox-block"
+              type="button"
+              onClick={syncOutbox}
+            >
+              <RefreshCw size={20} className="sync-outbox-icon" aria-hidden="true" />
+              <div className="sync-outbox-text">
+                <span className="sync-outbox-title">Отправить изменения</span>
+                <span className="sync-outbox-hint">В очереди: {outboxCount} действий</span>
+              </div>
+            </button>
+          )}
+        </>
       )}
       <button className="logout-card" type="button" onClick={() => logout()}>
         <LogOut size={20} className="logout-icon" aria-hidden="true" />
         Выйти из аккаунта
       </button>
 
-      {outboxOpen && (
+      {isAdmin && outboxOpen && (
         <div className="dialog-backdrop" onClick={() => setOutboxOpen(false)}>
           <div className="dialog admin-dialog-wide" onClick={(e) => e.stopPropagation()}>
             <div className="dialog-title">Очередь изменений</div>

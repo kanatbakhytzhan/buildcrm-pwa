@@ -445,6 +445,7 @@ export type AdminTenant = {
   is_active: boolean
   default_owner_user_id?: number | null
   ai_prompt?: string | null
+  ai_enabled?: boolean
 }
 
 export type TenantWhatsapp = {
@@ -519,6 +520,7 @@ export const updateAdminTenant = async (
     default_owner_user_id?: number | null
     is_active?: boolean
     ai_prompt?: string | null
+    ai_enabled?: boolean
   },
 ) => {
   return request<unknown>(`/api/admin/tenants/${tenantId}`, {

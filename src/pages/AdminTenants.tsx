@@ -44,7 +44,10 @@ const AdminTenants = () => {
     default_owner_user_id: '' as string | number,
     is_active: true,
     ai_prompt: '',
+    ai_enabled: true,
   })
+  const [aiToggleLoading, setAiToggleLoading] = useState(false)
+  const [savedMessage, setSavedMessage] = useState<string | null>(null)
 
   const [whatsapps, setWhatsapps] = useState<TenantWhatsapp[]>([])
   const [whatsappStatus, setWhatsappStatus] = useState<'idle' | 'loading'>('idle')
@@ -133,9 +136,36 @@ const AdminTenants = () => {
       default_owner_user_id: tenant.default_owner_user_id ?? '',
       is_active: tenant.is_active,
       ai_prompt: tenant.ai_prompt ?? '',
+      ai_enabled: tenant.ai_enabled !== false,
     })
     setEditOpen(true)
     setActionError(null)
+  }
+
+  const handleAiToggle = async (tenant: AdminTenant, nextEnabled: boolean) => {
+    setAiToggleLoading(true)
+    setActionError(null)
+    setSavedMessage(null)
+    try {
+      await updateAdminTenant(tenant.id, { ai_enabled: nextEnabled })
+      setTenants((prev) =>
+        prev.map((t) =>
+          t.id === tenant.id ? { ...t, ai_enabled: nextEnabled } : t,
+        ),
+      )
+      if (activeTenant?.id === tenant.id) {
+        setEditForm((p) => ({ ...p, ai_enabled: nextEnabled }))
+        setActiveTenant((a) => (a?.id === tenant.id ? { ...a, ai_enabled: nextEnabled } : a))
+      }
+      setActionError(null)
+      setSavedMessage('Сохранено')
+      setTimeout(() => setSavedMessage(null), 2500)
+    } catch (err) {
+      const apiError = err as { message?: string }
+      setActionError(apiError?.message || 'Ошибка')
+    } finally {
+      setAiToggleLoading(false)
+    }
   }
 
   const closeEdit = () => {
@@ -232,6 +262,7 @@ const AdminTenants = () => {
           : null,
         is_active: editForm.is_active,
         ai_prompt: editForm.ai_prompt.trim() || null,
+        ai_enabled: editForm.ai_enabled,
       })
       closeEdit()
       await loadTenants()
@@ -509,6 +540,30 @@ const AdminTenants = () => {
                   rows={4}
                 />
               </label>
+              <div className="field toggle-row toggle-row--between">
+                <div>
+                  <div className="field-label">AI-менеджер</div>
+                  <div className="settings-hint" style={{ marginTop: 4 }}>
+                    Когда выключено — бот не отвечает автоматически, но лиды продолжают сохраняться.
+                  </div>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={editForm.ai_enabled}
+                    disabled={aiToggleLoading}
+                    onChange={(e) =>
+                      activeTenant && handleAiToggle(activeTenant, e.target.checked)
+                    }
+                  />
+                  <span className="switch-track">
+                    <span className="switch-thumb" />
+                  </span>
+                </label>
+              </div>
+              {savedMessage && (
+                <div className="info-text" style={{ color: 'var(--success)' }}>{savedMessage}</div>
+              )}
               <label className="field toggle-row">
                 <span className="field-label">Активен</span>
                 <input

@@ -3,6 +3,8 @@ import { createContext, useContext } from 'react'
 export type AuthContextValue = {
   token: string | null
   isAuthenticated: boolean
+  /** True when user logged in via /admin/login (redirectTo /admin/*) */
+  isAdmin: boolean
   authMessage: string | null
   login: (
     email: string,

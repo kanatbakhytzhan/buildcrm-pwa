@@ -1331,6 +1331,10 @@ a {
   gap: 16px;
 }
 
+.toggle-row--between {
+  align-items: flex-start;
+}
+
 .toggle-title {
   font-weight: 600;
   font-size: 14px;

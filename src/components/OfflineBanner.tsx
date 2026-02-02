@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../context/LeadsContext'
 
 const OfflineBanner = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
+  const { isAdmin } = useAuth()
   const { outboxCount } = useLeads()
 
   useEffect(() => {
@@ -23,7 +25,7 @@ const OfflineBanner = () => {
   return (
     <div className="offline-banner" role="status">
       Офлайн режим: показаны сохранённые данные
-      {outboxCount > 0 ? ` · В очереди: ${outboxCount}` : ''}
+      {isAdmin && outboxCount > 0 ? ` · В очереди: ${outboxCount}` : ''}
     </div>
   )
 }
