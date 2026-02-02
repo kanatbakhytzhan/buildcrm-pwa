@@ -555,7 +555,10 @@ export const updateAdminTenant = async (
     ai_enabled?: boolean
   },
 ) => {
-  return request<unknown>(`/api/admin/tenants/${tenantId}`, {
+  if (import.meta.env.DEV) {
+    console.log('[AdminTenants] PATCH /api/admin/tenants/' + tenantId, payload)
+  }
+  const result = await request<unknown>(`/api/admin/tenants/${tenantId}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -563,6 +566,10 @@ export const updateAdminTenant = async (
     },
     body: JSON.stringify(payload),
   })
+  if (import.meta.env.DEV) {
+    console.log('[AdminTenants] PATCH response', result)
+  }
+  return result
 }
 
 /** WhatsApp/ChatFlow binding for one tenant (single object). */
@@ -585,11 +592,14 @@ export const getTenantWhatsappBinding = async (
     method: 'GET',
     headers: { ...authHeaders() },
   })
+  const text = await response.text()
+  if (import.meta.env.DEV) {
+    console.log('[AdminTenants] GET whatsapp', response.status, text?.slice(0, 200))
+  }
   if (response.status === 404) {
     return { token: '', instance_id: '', phone_number: '', active: true }
   }
   if (!response.ok) throw await buildError(response)
-  const text = await response.text()
   if (!text) return { token: '', instance_id: '', phone_number: '', active: true }
   try {
     const data = JSON.parse(text) as unknown
@@ -608,8 +618,8 @@ export const getTenantWhatsappBinding = async (
   }
 }
 
-/** PUT binding: PUT /api/admin/tenants/{id}/whatsapp. Body keys: chatflow_token, chatflow_instance_id, phone_number, active. */
-export const putTenantWhatsappBinding = async (
+/** POST binding: POST /api/admin/tenants/{id}/whatsapp. Body: chatflow_token, chatflow_instance_id, phone_number, active. */
+export const postTenantWhatsappBinding = async (
   tenantId: string | number,
   payload: {
     token?: string | null
@@ -630,22 +640,33 @@ export const putTenantWhatsappBinding = async (
     phone_number: phone_number || null,
     active: payload.active !== false,
   }
+  if (import.meta.env.DEV) {
+    console.log('[AdminTenants] POST /api/admin/tenants/' + tenantId + '/whatsapp', {
+      chatflow_token: chatflow_token ? `***len=${chatflow_token.length}` : null,
+      chatflow_instance_id: chatflow_instance_id || null,
+      phone_number: phone_number || null,
+      active: body.active,
+    })
+  }
   const url = fullUrl(`/api/admin/tenants/${tenantId}/whatsapp`)
   const response = await fetch(url, {
-    method: 'PUT',
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders(),
     },
     body: JSON.stringify(body),
   })
+  const text = await response.text()
+  if (import.meta.env.DEV) {
+    console.log('[AdminTenants] POST whatsapp response', response.status, text?.slice(0, 300))
+  }
   if (response.status === 404) {
     const err = new Error(BINDING_404_MESSAGE) as ApiError
     err.status = 404
     throw err
   }
   if (!response.ok) {
-    const text = await response.text()
     let message = 'Не удалось сохранить привязку'
     if (text) {
       try {
@@ -667,7 +688,6 @@ export const putTenantWhatsappBinding = async (
     err.status = response.status
     throw err
   }
-  const text = await response.text()
   if (!text) return undefined
   try {
     return JSON.parse(text) as unknown

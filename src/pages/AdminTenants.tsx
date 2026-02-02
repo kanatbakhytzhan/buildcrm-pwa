@@ -7,7 +7,7 @@ import {
   getAdminTenants,
   getTenantUsers,
   getTenantWhatsappBinding,
-  putTenantWhatsappBinding,
+  postTenantWhatsappBinding,
   updateAdminTenant,
   type AdminTenant,
   type TenantUser,
@@ -86,10 +86,10 @@ const AdminTenants = () => {
       name: tenant.name,
       ai_prompt: tenant.ai_prompt ?? '',
       ai_enabled: tenant.ai_enabled !== false,
-      token: tenant.token ?? '',
-      instance_id: tenant.instance_id ?? '',
-      phone_number: tenant.phone_number ?? '',
-      whatsapp_active: tenant.whatsapp_active !== false,
+      token: '',
+      instance_id: '',
+      phone_number: '',
+      whatsapp_active: true,
     })
     setEditOpen(true)
     setActionError(null)
@@ -105,7 +105,7 @@ const AdminTenants = () => {
         }))
       })
       .catch(() => {
-        // keep form from tenant; binding load failed
+        // leave binding fields empty
       })
       .finally(() => setBindingLoading(false))
   }
@@ -206,28 +206,40 @@ const AdminTenants = () => {
         ai_prompt: editForm.ai_prompt.trim() || null,
         ai_enabled: editForm.ai_enabled,
       })
-      try {
-        await putTenantWhatsappBinding(activeTenant.id, {
-          token: editForm.token.trim() || null,
-          instance_id: editForm.instance_id.trim() || null,
-          phone_number: editForm.phone_number.trim() || null,
-          active: editForm.whatsapp_active,
-        })
-      } catch (bindErr) {
-        const msg = (bindErr as { message?: string })?.message || 'Не удалось сохранить привязку'
-        setActionError(msg)
-        await loadTenants()
-        setActionStatus('idle')
-        return
-      }
-      await loadTenants()
-      closeEdit()
     } catch (err) {
       const apiError = err as { message?: string }
-      setActionError(apiError?.message || 'Не удалось сохранить')
-    } finally {
+      setActionError(apiError?.message || 'Не удалось сохранить tenant')
       setActionStatus('idle')
+      return
     }
+    try {
+      await postTenantWhatsappBinding(activeTenant.id, {
+        token: editForm.token.trim() || null,
+        instance_id: editForm.instance_id.trim() || null,
+        phone_number: editForm.phone_number.trim() || null,
+        active: editForm.whatsapp_active,
+      })
+    } catch (bindErr) {
+      const msg = (bindErr as { message?: string })?.message || 'Не удалось сохранить привязку'
+      setActionError(msg)
+      setActionStatus('idle')
+      return
+    }
+    try {
+      const binding = await getTenantWhatsappBinding(activeTenant.id)
+      setEditForm((prev) => ({
+        ...prev,
+        token: (binding.token ?? '').toString(),
+        instance_id: (binding.instance_id ?? '').toString(),
+        phone_number: (binding.phone_number ?? '').toString(),
+        whatsapp_active: binding.active !== false,
+      }))
+    } catch {
+      // ignore refetch error
+    }
+    await loadTenants()
+    closeEdit()
+    setActionStatus('idle')
   }
 
   return (
