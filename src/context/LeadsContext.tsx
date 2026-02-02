@@ -1,5 +1,8 @@
 import { createContext, useContext } from 'react'
 import type { NormalizedLead } from '../utils/normalizeLead'
+import type { OutboxEntry } from '../services/offlineDb'
+
+export type SyncOutboxResult = { processed: number; failed: number; stoppedByAuth: boolean }
 
 export type LeadsContextValue = {
   leads: NormalizedLead[]
@@ -17,7 +20,10 @@ export type LeadsContextValue = {
     update: Partial<NormalizedLead>,
   ) => Promise<void>
   deleteLead: (id: string) => Promise<void>
-  syncOutbox: () => Promise<void>
+  syncOutbox: () => Promise<SyncOutboxResult>
+  getOutboxItems: () => Promise<OutboxEntry[]>
+  clearOutbox: () => Promise<void>
+  refreshOutboxState: () => Promise<void>
   clearToast: () => void
   showToast: (message: string) => void
 }

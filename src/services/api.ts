@@ -248,7 +248,8 @@ export const deleteLead = async (id: string) => {
 export type LeadComment = {
   id: string | number
   lead_id?: string | number
-  body: string
+  body?: string
+  text?: string
   created_at?: string
   author?: string
 }
@@ -280,21 +281,81 @@ export const getLeadComments = async (leadId: string): Promise<LeadComment[]> =>
   }
 }
 
+/** POST /api/leads/{lead_id}/comments — body must be { "text": "<string>" } */
 export const postLeadComment = async (
   leadId: string,
-  body: string,
+  text: string,
 ): Promise<LeadComment> => {
-  const data = await request<unknown>(`/api/leads/${leadId}/comments`, {
+  const trimmed = typeof text === 'string' ? text.trim() : ''
+  const idForUrl =
+    typeof leadId === 'number'
+      ? String(leadId)
+      : typeof leadId === 'string'
+        ? leadId.trim()
+        : ''
+  if (!idForUrl) {
+    const err = new Error('Не удалось определить lead_id') as ApiError
+    err.status = 400
+    throw err
+  }
+  const url = fullUrl(`/api/leads/${idForUrl}/comments`)
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders(),
     },
-    body: JSON.stringify({ body: body.trim() }),
+    body: JSON.stringify({ text: trimmed }),
   })
-  const obj = data as Record<string, unknown>
+  const responseText = await response.text()
+  let responseJson: unknown = null
+  if (responseText) {
+    try {
+      responseJson = JSON.parse(responseText)
+    } catch {
+      responseJson = responseText
+    }
+  }
+  if (!response.ok) {
+    if (response.status === 422) {
+      console.error('[api] POST comments 422 response:', responseJson)
+      const detail =
+        typeof responseJson === 'object' && responseJson !== null && 'detail' in responseJson
+          ? (responseJson as { detail: unknown }).detail
+          : responseJson
+      console.error('[api] POST comments 422 detail:', detail)
+    } else {
+      console.error('[api] POST comments error', response.status, responseJson)
+    }
+    const message =
+      response.status === 401
+        ? 'Сессия истекла. Войдите снова.'
+        : response.status === 403
+          ? 'Нет доступа'
+          : response.status === 404
+            ? 'Лид не найден'
+            : response.status === 422
+              ? 'Ошибка формата комментария'
+              : response.status >= 500
+                ? 'Ошибка сервера'
+                : typeof responseJson === 'object' &&
+                    responseJson !== null &&
+                    'message' in responseJson
+                  ? String((responseJson as { message: unknown }).message)
+                  : 'Не удалось добавить комментарий'
+    const error = new Error(message) as ApiError
+    error.status = response.status
+    throw error
+  }
+  if (!responseText) {
+    const err = new Error('Пустой ответ сервера') as ApiError
+    err.status = response.status
+    throw err
+  }
+  const obj = responseJson as Record<string, unknown>
   const comment = (obj?.comment ?? obj?.data ?? obj) as LeadComment
-  return comment
+  const bodyFromApi = comment?.body ?? (comment as { text?: string })?.text
+  return { ...comment, body: bodyFromApi ?? trimmed } as LeadComment
 }
 
 export type AdminUser = {

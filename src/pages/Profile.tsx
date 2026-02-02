@@ -1,20 +1,43 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Flame, MessageCircle, RefreshCw, LogOut, ChevronRight, Lock } from 'lucide-react'
+import { Bell, Flame, MessageCircle, RefreshCw, LogOut, ChevronRight, Lock, Inbox } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../context/LeadsContext'
 import { changePassword } from '../services/api'
+import type { OutboxEntry } from '../services/offlineDb'
 
 const NOTIFICATIONS_KEY = 'buildcrm_notifications_enabled'
 const PROFILE_EMAIL_KEY = 'buildcrm_profile_email'
 const PROFILE_COMPANY_KEY = 'buildcrm_profile_company'
 
+function outboxLabel(entry: OutboxEntry): string {
+  if (entry.type === 'PATCH_STATUS') {
+    return `Обновление статуса лида #${entry.leadId}`
+  }
+  return `Удаление лида #${entry.leadId}`
+}
+
+function outboxMethodUrl(entry: OutboxEntry): string {
+  if (entry.type === 'PATCH_STATUS') return `PATCH /api/leads/${entry.leadId}`
+  return `DELETE /api/leads/${entry.leadId}`
+}
+
 const Profile = () => {
   const navigate = useNavigate()
   const { logout } = useAuth()
-  const { outboxCount, syncOutbox, showToast } = useLeads()
+  const {
+    outboxCount,
+    syncOutbox,
+    showToast,
+    getOutboxItems,
+    clearOutbox,
+  } = useLeads()
   const [changePwdOpen, setChangePwdOpen] = useState(false)
+  const [outboxOpen, setOutboxOpen] = useState(false)
+  const [outboxItems, setOutboxItems] = useState<OutboxEntry[]>([])
+  const [outboxLoading, setOutboxLoading] = useState(false)
+  const [syncResult, setSyncResult] = useState<{ stoppedByAuth?: boolean } | null>(null)
   const [changePwdForm, setChangePwdForm] = useState({
     current_password: '',
     new_password: '',
@@ -61,6 +84,46 @@ const Profile = () => {
     setChangePwdOpen(false)
     setChangePwdForm({ current_password: '', new_password: '', confirm_password: '' })
     setChangePwdError(null)
+  }
+
+  const loadOutboxItems = useCallback(async () => {
+    const items = await getOutboxItems()
+    setOutboxItems(items)
+  }, [getOutboxItems])
+
+  useEffect(() => {
+    if (outboxOpen) {
+      loadOutboxItems()
+    }
+  }, [outboxOpen, loadOutboxItems])
+
+  const handleRetrySync = async () => {
+    setOutboxLoading(true)
+    setSyncResult(null)
+    try {
+      const result = await syncOutbox()
+      setSyncResult({ stoppedByAuth: result.stoppedByAuth })
+      if (result.stoppedByAuth) {
+        showToast('Нужно перезайти')
+      } else if (result.processed > 0 && result.failed === 0) {
+        showToast('Отправка выполнена')
+      }
+      await loadOutboxItems()
+    } finally {
+      setOutboxLoading(false)
+    }
+  }
+
+  const handleClearOutbox = () => {
+    if (!window.confirm('Очистить всю очередь? Неотправленные действия будут удалены.')) return
+    setOutboxLoading(true)
+    clearOutbox()
+      .then(() => {
+        showToast('Очередь очищена')
+        setOutboxOpen(false)
+        loadOutboxItems()
+      })
+      .finally(() => setOutboxLoading(false))
   }
 
   const handleChangePwdSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -179,6 +242,24 @@ const Profile = () => {
           <ChevronRight size={20} className="settings-chevron" />
         </button>
       </div>
+      <button
+        className="settings-row settings-row--tap"
+        type="button"
+        onClick={() => setOutboxOpen(true)}
+      >
+        <div className="settings-left">
+          <div className="settings-icon settings-icon--primary" aria-hidden="true">
+            <Inbox size={20} />
+          </div>
+          <div className="settings-text">
+            <div className="settings-title">Очередь изменений</div>
+            <div className="settings-hint">
+              {outboxCount > 0 ? `В очереди: ${outboxCount} действий` : 'Просмотр и отправка'}
+            </div>
+          </div>
+        </div>
+        <ChevronRight size={20} className="settings-chevron" />
+      </button>
       {outboxCount > 0 && (
         <button
           className="sync-outbox-block"
@@ -196,6 +277,63 @@ const Profile = () => {
         <LogOut size={20} className="logout-icon" aria-hidden="true" />
         Выйти из аккаунта
       </button>
+
+      {outboxOpen && (
+        <div className="dialog-backdrop" onClick={() => setOutboxOpen(false)}>
+          <div className="dialog admin-dialog-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-title">Очередь изменений</div>
+            {syncResult?.stoppedByAuth && (
+              <div className="error-text" style={{ marginBottom: 8 }}>
+                Нужно перезайти. Выйдите и войдите снова.
+              </div>
+            )}
+            {outboxItems.length === 0 ? (
+              <div className="info-text">Очередь пуста</div>
+            ) : (
+              <ul className="outbox-list">
+                {outboxItems.map((entry) => (
+                  <li key={entry.id ?? entry.leadId + String(entry.createdAt)} className="outbox-item">
+                    <div className="outbox-item-label">{outboxLabel(entry)}</div>
+                    <div className="outbox-item-meta">{outboxMethodUrl(entry)}</div>
+                    <div className="outbox-item-meta">
+                      {new Date(entry.createdAt).toLocaleString('ru')}
+                      {entry.attempts > 0 && ` · попыток: ${entry.attempts}`}
+                    </div>
+                    {entry.lastError && (
+                      <div className="error-text outbox-item-error">{entry.lastError}</div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="dialog-actions" style={{ marginTop: 16 }}>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setOutboxOpen(false)}
+              >
+                Закрыть
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={handleRetrySync}
+                disabled={outboxLoading || outboxItems.length === 0}
+              >
+                {outboxLoading ? 'Отправка…' : 'Повторить отправку сейчас'}
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={handleClearOutbox}
+                disabled={outboxLoading || outboxItems.length === 0}
+              >
+                Очистить очередь
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {changePwdOpen && (
         <div className="dialog-backdrop" onClick={closeChangePwd}>

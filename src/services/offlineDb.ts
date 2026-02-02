@@ -102,6 +102,14 @@ export const getOutboxCount = async () => {
   return offlineDb.outbox.count()
 }
 
+export const getOutboxItems = async (): Promise<OutboxEntry[]> => {
+  return offlineDb.outbox.orderBy('createdAt').toArray()
+}
+
+export const clearOutbox = async () => {
+  await offlineDb.outbox.clear()
+}
+
 export const clearOutboxItem = async (id: number) => {
   await offlineDb.outbox.delete(id)
 }

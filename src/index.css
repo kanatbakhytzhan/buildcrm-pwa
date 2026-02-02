@@ -1199,6 +1199,39 @@ a {
   overflow: auto;
 }
 
+.outbox-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.outbox-item {
+  padding: 12px;
+  background: var(--bg);
+  border-radius: var(--radius-input);
+  border: 1px solid var(--border);
+}
+
+.outbox-item-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.outbox-item-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.outbox-item-error {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
 .admin-whatsapp-list {
   display: grid;
   gap: 8px;

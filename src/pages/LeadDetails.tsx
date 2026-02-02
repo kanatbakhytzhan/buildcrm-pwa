@@ -14,7 +14,7 @@ import type { NormalizedLead } from '../utils/normalizeLead'
 const LeadDetails = () => {
   const { id = '' } = useParams()
   const navigate = useNavigate()
-  const { getLeadById, updateLeadStatus, deleteLead } = useLeads()
+  const { getLeadById, updateLeadStatus, deleteLead, showToast, updateLeadInState } = useLeads()
   const leadFromContext = id ? getLeadById(id) : undefined
   const [cachedLead, setCachedLead] = useState<NormalizedLead | null>(null)
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
@@ -144,15 +144,35 @@ const LeadDetails = () => {
 
   const handleAddComment = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!id || !commentText.trim()) return
+    const trimmed = commentText.trim()
+    if (!trimmed) {
+      showToast('Введите комментарий')
+      return
+    }
+    const leadIdForApi = id.trim()
+    if (!leadIdForApi) {
+      showToast('Не удалось определить lead_id')
+      return
+    }
     setCommentSubmitting(true)
     setActionError(null)
     try {
-      const newComment = await postLeadComment(id, commentText.trim())
-      setComments((prev) => [newComment, ...prev])
+      const newComment = await postLeadComment(leadIdForApi, trimmed)
+      const commentBody = newComment?.body ?? (newComment as { text?: string })?.text ?? trimmed
       setCommentText('')
-    } catch {
-      setActionError('Не удалось добавить комментарий')
+      await loadComments()
+      setComments((prev) => {
+        const added = { ...newComment, body: commentBody }
+        const exists = prev.some((c) => String(c.id) === String(added.id))
+        return exists ? prev : [added, ...prev]
+      })
+      if (lead?.id) {
+        await updateLeadInState(lead.id, { last_comment: commentBody })
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Не удалось добавить комментарий'
+      showToast(msg)
+      setActionError(msg)
     } finally {
       setCommentSubmitting(false)
     }
@@ -249,7 +269,7 @@ const LeadDetails = () => {
                 <ul className="comments-list">
                   {comments.map((c) => (
                     <li key={c.id} className="comment-item">
-                      <div className="comment-body">{c.body}</div>
+                      <div className="comment-body">{c.body ?? c.text ?? '—'}</div>
                       {(c.created_at || c.author) && (
                         <div className="comment-meta">
                           {c.author && <span>{c.author}</span>}
