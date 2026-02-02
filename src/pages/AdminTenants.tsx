@@ -4,16 +4,11 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   addTenantUser,
-  addTenantWhatsapp,
-  createAdminTenant,
-  deleteTenantWhatsapp,
   getAdminTenants,
   getTenantUsers,
-  getTenantWhatsapps,
   updateAdminTenant,
   type AdminTenant,
   type TenantUser,
-  type TenantWhatsapp,
 } from '../services/api'
 
 const AdminTenants = () => {
@@ -23,26 +18,15 @@ const AdminTenants = () => {
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
 
-  const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
-  const [whatsappOpen, setWhatsappOpen] = useState(false)
   const [usersOpen, setUsersOpen] = useState(false)
   const [activeTenant, setActiveTenant] = useState<AdminTenant | null>(null)
 
   const [actionStatus, setActionStatus] = useState<'idle' | 'loading'>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const [createForm, setCreateForm] = useState({
-    name: '',
-    slug: '',
-    default_owner_user_id: '' as string | number,
-    is_active: true,
-  })
   const [editForm, setEditForm] = useState({
     name: '',
-    slug: '',
-    default_owner_user_id: '' as string | number,
-    is_active: true,
     ai_prompt: '',
     ai_enabled: true,
     token: '',
@@ -53,16 +37,6 @@ const AdminTenants = () => {
   const [tenantUsersError, setTenantUsersError] = useState<string | null>(null)
   const [aiToggleLoading, setAiToggleLoading] = useState(false)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
-
-  const [whatsapps, setWhatsapps] = useState<TenantWhatsapp[]>([])
-  const [whatsappStatus, setWhatsappStatus] = useState<'idle' | 'loading'>('idle')
-  const [deletingAccountId, setDeletingAccountId] = useState<string | number | null>(null)
-  const [addWhatsappForm, setAddWhatsappForm] = useState({
-    phone_number: '',
-    phone_number_id: '',
-    verify_token: '',
-    waba_id: '',
-  })
 
   const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([])
   const [tenantUsersStatus, setTenantUsersStatus] = useState<'idle' | 'loading'>('idle')
@@ -96,50 +70,17 @@ const AdminTenants = () => {
     const onEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (usersOpen) closeUsers()
-        else if (whatsappOpen) closeWhatsapp()
         else if (editOpen) closeEdit()
-        else if (createOpen) closeCreate()
       }
     }
     window.addEventListener('keydown', onEscape)
     return () => window.removeEventListener('keydown', onEscape)
-  }, [createOpen, editOpen, whatsappOpen, usersOpen])
-
-  const loadWhatsapps = useCallback(
-    async (tenantId: string | number) => {
-      setWhatsappStatus('loading')
-      try {
-        const data = await getTenantWhatsapps(tenantId)
-        setWhatsapps(data)
-      } catch {
-        setWhatsapps([])
-      } finally {
-        setWhatsappStatus('idle')
-      }
-    },
-    [],
-  )
-
-  const openWhatsapp = (tenant: AdminTenant) => {
-    setActiveTenant(tenant)
-    setWhatsappOpen(true)
-    setAddWhatsappForm({ phone_number: '', phone_number_id: '', verify_token: '', waba_id: '' })
-    loadWhatsapps(tenant.id)
-  }
-
-  const closeCreate = () => {
-    setCreateOpen(false)
-    setCreateForm({ name: '', slug: '', default_owner_user_id: '', is_active: true })
-    setActionError(null)
-  }
+  }, [editOpen, usersOpen])
 
   const openEdit = (tenant: AdminTenant) => {
     setActiveTenant(tenant)
     setEditForm({
       name: tenant.name,
-      slug: tenant.slug,
-      default_owner_user_id: tenant.default_owner_user_id ?? '',
-      is_active: tenant.is_active,
       ai_prompt: tenant.ai_prompt ?? '',
       ai_enabled: tenant.ai_enabled !== false,
       token: tenant.token ?? '',
@@ -181,11 +122,6 @@ const AdminTenants = () => {
     setEditOpen(false)
     setActiveTenant(null)
     setActionError(null)
-  }
-
-  const closeWhatsapp = () => {
-    setWhatsappOpen(false)
-    setActiveTenant(null)
   }
 
   const loadTenantUsers = useCallback(async (tenantId: string | number) => {
@@ -238,29 +174,6 @@ const AdminTenants = () => {
     }
   }
 
-  const handleCreateSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setActionStatus('loading')
-    setActionError(null)
-    try {
-      await createAdminTenant({
-        name: createForm.name.trim(),
-        slug: createForm.slug.trim(),
-        default_owner_user_id: createForm.default_owner_user_id
-          ? Number(createForm.default_owner_user_id)
-          : undefined,
-        is_active: createForm.is_active,
-      })
-      closeCreate()
-      await loadTenants()
-    } catch (err) {
-      const apiError = err as { message?: string }
-      setActionError(apiError?.message || 'Не удалось создать клиента')
-    } finally {
-      setActionStatus('idle')
-    }
-  }
-
   const handleEditSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!activeTenant) return
@@ -269,11 +182,9 @@ const AdminTenants = () => {
     try {
       await updateAdminTenant(activeTenant.id, {
         name: editForm.name.trim(),
-        slug: editForm.slug.trim(),
-        default_owner_user_id: editForm.default_owner_user_id
-          ? Number(editForm.default_owner_user_id)
-          : null,
-        is_active: editForm.is_active,
+        slug: activeTenant.slug,
+        default_owner_user_id: activeTenant.default_owner_user_id ?? null,
+        is_active: activeTenant.is_active,
         ai_prompt: editForm.ai_prompt.trim() || null,
         ai_enabled: editForm.ai_enabled,
         token: editForm.token.trim() || null,
@@ -291,46 +202,6 @@ const AdminTenants = () => {
     }
   }
 
-  const handleAddWhatsappSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!activeTenant) return
-    setActionStatus('loading')
-    setActionError(null)
-    try {
-      await addTenantWhatsapp(activeTenant.id, {
-        phone_number: addWhatsappForm.phone_number.trim(),
-        phone_number_id: addWhatsappForm.phone_number_id.trim(),
-        verify_token: addWhatsappForm.verify_token.trim() || undefined,
-        waba_id: addWhatsappForm.waba_id.trim() || undefined,
-      })
-      setAddWhatsappForm({ phone_number: '', phone_number_id: '', verify_token: '', waba_id: '' })
-      setActionError(null)
-      await loadWhatsapps(activeTenant.id)
-    } catch (err) {
-      const apiError = err as { status?: number; message?: string }
-      setActionError(apiError?.message || 'Не удалось добавить номер')
-    } finally {
-      setActionStatus('idle')
-    }
-  }
-
-  const handleDeleteWhatsapp = async (w: TenantWhatsapp) => {
-    if (!activeTenant) return
-    const id = w.id ?? w.phone_number_id
-    if (!window.confirm(`Удалить номер ${w.phone_number}?`)) return
-    setDeletingAccountId(id)
-    setActionError(null)
-    try {
-      await deleteTenantWhatsapp(activeTenant.id, id)
-      await loadWhatsapps(activeTenant.id)
-    } catch (err) {
-      const apiError = err as { message?: string }
-      setActionError(apiError?.message || 'Не удалось удалить номер')
-    } finally {
-      setDeletingAccountId(null)
-    }
-  }
-
   return (
     <div className="page-stack">
       <div className="page-header">
@@ -339,13 +210,6 @@ const AdminTenants = () => {
           <p className="subtitle">Клиенты (Tenants)</p>
         </div>
         <div className="action-card">
-          <button
-            className="primary-button"
-            type="button"
-            onClick={() => setCreateOpen(true)}
-          >
-            Создать клиента
-          </button>
           <button
             className="ghost-button"
             type="button"
@@ -393,11 +257,6 @@ const AdminTenants = () => {
             <div className="toggle-row">
               <div>
                 <div className="toggle-title">{t.name}</div>
-                <div className="toggle-subtitle">slug: {t.slug}</div>
-                <div className="info-text">
-                  Owner ID: {t.default_owner_user_id ?? '—'} ·{' '}
-                  {t.is_active ? 'Активен' : 'Неактивен'}
-                </div>
               </div>
             </div>
             <div className="toggle-row">
@@ -411,13 +270,6 @@ const AdminTenants = () => {
               <button
                 className="secondary-button"
                 type="button"
-                onClick={() => openWhatsapp(t)}
-              >
-                WhatsApp номера
-              </button>
-              <button
-                className="secondary-button"
-                type="button"
                 onClick={() => openUsers(t)}
               >
                 Пользователи
@@ -425,81 +277,6 @@ const AdminTenants = () => {
             </div>
           </div>
         ))}
-
-      {/* Create tenant modal */}
-      {createOpen && (
-        <div className="dialog-backdrop" onClick={closeCreate}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="dialog-title">Создать клиента</div>
-            <form className="form-grid" onSubmit={handleCreateSubmit}>
-              <label className="field">
-                <span className="field-label">Название</span>
-                <input
-                  className="field-input"
-                  type="text"
-                  value={createForm.name}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({ ...p, name: e.target.value }))
-                  }
-                  placeholder="Компания"
-                  required
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Slug</span>
-                <input
-                  className="field-input"
-                  type="text"
-                  value={createForm.slug}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({ ...p, slug: e.target.value }))
-                  }
-                  placeholder="company"
-                  required
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Default Owner User ID</span>
-                <input
-                  className="field-input"
-                  type="number"
-                  value={createForm.default_owner_user_id}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({
-                      ...p,
-                      default_owner_user_id: e.target.value,
-                    }))
-                  }
-                  placeholder="1"
-                />
-              </label>
-              <label className="field toggle-row">
-                <span className="field-label">Активен</span>
-                <input
-                  type="checkbox"
-                  checked={createForm.is_active}
-                  onChange={(e) =>
-                    setCreateForm((p) => ({ ...p, is_active: e.target.checked }))
-                  }
-                />
-              </label>
-              {actionError && <div className="error-text">{actionError}</div>}
-              <div className="dialog-actions">
-                <button className="ghost-button" type="button" onClick={closeCreate}>
-                  Отмена
-                </button>
-                <button
-                  className="primary-button"
-                  type="submit"
-                  disabled={actionStatus === 'loading'}
-                >
-                  {actionStatus === 'loading' ? 'Создаю...' : 'Создать'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Edit tenant modal */}
       {editOpen && activeTenant && (
@@ -517,32 +294,6 @@ const AdminTenants = () => {
                     setEditForm((p) => ({ ...p, name: e.target.value }))
                   }
                   required
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Slug</span>
-                <input
-                  className="field-input"
-                  type="text"
-                  value={editForm.slug}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, slug: e.target.value }))
-                  }
-                  required
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Default Owner User ID</span>
-                <input
-                  className="field-input"
-                  type="number"
-                  value={editForm.default_owner_user_id}
-                  onChange={(e) =>
-                    setEditForm((p) => ({
-                      ...p,
-                      default_owner_user_id: e.target.value,
-                    }))
-                  }
                 />
               </label>
               <label className="field">
@@ -585,8 +336,13 @@ const AdminTenants = () => {
                 WhatsApp / ChatFlow привязка
               </div>
               <div className="settings-hint" style={{ marginBottom: 10 }}>
-                Для каждого клиента нужен свой instance_id (QR в ChatFlow) + token. Эти данные сохраняются тут, чтобы бот отвечал и лиды шли в нужную компанию.
+                Для каждого клиента нужен свой instance_id (QR в ChatFlow) + token. Без них бот отвечать не будет.
               </div>
+              {(!editForm.token.trim() || !editForm.instance_id.trim()) && (
+                <div className="error-text" style={{ marginBottom: 8 }}>
+                  Не привязано: бот отвечать не будет.
+                </div>
+              )}
               <label className="field">
                 <span className="field-label">token</span>
                 <input
@@ -630,16 +386,6 @@ const AdminTenants = () => {
                   checked={editForm.whatsapp_active}
                   onChange={(e) =>
                     setEditForm((p) => ({ ...p, whatsapp_active: e.target.checked }))
-                  }
-                />
-              </label>
-              <label className="field toggle-row">
-                <span className="field-label">Активен</span>
-                <input
-                  type="checkbox"
-                  checked={editForm.is_active}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, is_active: e.target.checked }))
                   }
                 />
               </label>
@@ -729,123 +475,6 @@ const AdminTenants = () => {
               {actionError && <div className="error-text">{actionError}</div>}
               <div className="dialog-actions">
                 <button className="ghost-button" type="button" onClick={closeUsers}>
-                  Закрыть
-                </button>
-                <button
-                  className="primary-button"
-                  type="submit"
-                  disabled={actionStatus === 'loading'}
-                >
-                  {actionStatus === 'loading' ? 'Добавляю...' : 'Добавить'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {whatsappOpen && activeTenant && (
-        <div className="dialog-backdrop" onClick={closeWhatsapp}>
-          <div
-            className="dialog admin-dialog-wide"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="dialog-title">
-              WhatsApp номера — {activeTenant.name}
-            </div>
-
-            {whatsappStatus === 'loading' ? (
-              <div className="info-text">Загрузка...</div>
-            ) : whatsapps.length === 0 ? (
-              <div className="info-text">Номеров пока нет</div>
-            ) : (
-              <div className="admin-whatsapp-list">
-                {whatsapps.map((w, i) => (
-                  <div className="card admin-whatsapp-row" key={w.id ?? w.phone_number_id ?? i}>
-                    <div>
-                      <div className="toggle-title">{w.phone_number}</div>
-                      <div className="toggle-subtitle">
-                        ID: {w.phone_number_id} ·{' '}
-                        {w.is_active ? 'Активен' : 'Неактивен'}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="secondary-button admin-whatsapp-delete"
-                      onClick={() => handleDeleteWhatsapp(w)}
-                      disabled={deletingAccountId === (w.id ?? w.phone_number_id)}
-                    >
-                      {deletingAccountId === (w.id ?? w.phone_number_id)
-                        ? 'Удаляю...'
-                        : 'Удалить'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="dialog-text">Добавить номер</div>
-            <form className="form-grid" onSubmit={handleAddWhatsappSubmit}>
-              <label className="field">
-                <span className="field-label">Phone number</span>
-                <input
-                  className="field-input"
-                  type="text"
-                  value={addWhatsappForm.phone_number}
-                  onChange={(e) =>
-                    setAddWhatsappForm((p) => ({
-                      ...p,
-                      phone_number: e.target.value,
-                    }))
-                  }
-                  placeholder="+77001234567"
-                  required
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Phone number ID</span>
-                <input
-                  className="field-input"
-                  type="text"
-                  value={addWhatsappForm.phone_number_id}
-                  onChange={(e) =>
-                    setAddWhatsappForm((p) => ({
-                      ...p,
-                      phone_number_id: e.target.value,
-                    }))
-                  }
-                  placeholder="123456789"
-                  required
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Verify token (опционально)</span>
-                <input
-                  className="field-input"
-                  type="text"
-                  value={addWhatsappForm.verify_token}
-                  onChange={(e) =>
-                    setAddWhatsappForm((p) => ({
-                      ...p,
-                      verify_token: e.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">WABA ID (опционально)</span>
-                <input
-                  className="field-input"
-                  type="text"
-                  value={addWhatsappForm.waba_id}
-                  onChange={(e) =>
-                    setAddWhatsappForm((p) => ({ ...p, waba_id: e.target.value }))
-                  }
-                />
-              </label>
-              {actionError && <div className="error-text">{actionError}</div>}
-              <div className="dialog-actions">
-                <button className="ghost-button" type="button" onClick={closeWhatsapp}>
                   Закрыть
                 </button>
                 <button

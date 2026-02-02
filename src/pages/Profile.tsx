@@ -288,9 +288,7 @@ const Profile = () => {
             <div className="settings-text">
               <div className="settings-title">AI-менеджер</div>
               <div className="settings-hint">
-                {aiEnabled
-                  ? 'Бот отвечает автоматически, лиды сохраняются.'
-                  : 'Бот не отвечает, но лиды сохраняются.'}
+                Когда выключено — бот не отвечает автоматически, но лиды продолжают сохраняться.
               </div>
             </div>
           </div>
@@ -308,7 +306,7 @@ const Profile = () => {
           </label>
         </div>
         <div className="settings-row-help">
-          /stop — выключить в этом чате, /start — включить обратно
+          Отключить в одном чате: /stop. Включить: /start.
         </div>
       </div>
       {isAdmin && (
