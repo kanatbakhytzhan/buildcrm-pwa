@@ -438,6 +438,11 @@ a {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
+.field-input--error {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
 .field-input--textarea {
   min-height: 80px;
   resize: vertical;

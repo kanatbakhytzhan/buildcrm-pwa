@@ -212,32 +212,49 @@ const AdminTenants = () => {
       setActionStatus('idle')
       return
     }
-    try {
-      await postTenantWhatsappBinding(activeTenant.id, {
-        token: editForm.token.trim() || null,
-        instance_id: editForm.instance_id.trim() || null,
-        phone_number: editForm.phone_number.trim() || null,
-        active: editForm.whatsapp_active,
-      })
-    } catch (bindErr) {
-      const msg = (bindErr as { message?: string })?.message || 'Не удалось сохранить привязку'
-      setActionError(msg)
-      setActionStatus('idle')
-      return
-    }
-    try {
-      const binding = await getTenantWhatsappBinding(activeTenant.id)
-      setEditForm((prev) => ({
-        ...prev,
-        token: (binding.token ?? '').toString(),
-        instance_id: (binding.instance_id ?? '').toString(),
-        phone_number: (binding.phone_number ?? '').toString(),
-        whatsapp_active: binding.active !== false,
-      }))
-    } catch {
-      // ignore refetch error
+    const needBinding =
+      editForm.whatsapp_active ||
+      !!editForm.token.trim() ||
+      !!editForm.instance_id.trim() ||
+      !!editForm.phone_number.trim()
+    if (needBinding) {
+      if (import.meta.env.DEV) {
+        console.log('[AdminTenants] POST whatsapp payload keys:', {
+          chatflow_token: editForm.token ? `len=${editForm.token.trim().length}` : null,
+          chatflow_instance_id: editForm.instance_id ? `len=${editForm.instance_id.trim().length}` : null,
+          phone_number: editForm.phone_number?.trim() || null,
+          active: editForm.whatsapp_active,
+        })
+      }
+      try {
+        await postTenantWhatsappBinding(activeTenant.id, {
+          token: editForm.token.trim() || null,
+          instance_id: editForm.instance_id.trim() || null,
+          phone_number: editForm.phone_number.trim() || null,
+          active: editForm.whatsapp_active,
+        })
+      } catch (bindErr) {
+        const msg = (bindErr as { message?: string })?.message || 'Не удалось сохранить привязку'
+        setActionError(msg)
+        setActionStatus('idle')
+        return
+      }
+      try {
+        const binding = await getTenantWhatsappBinding(activeTenant.id)
+        setEditForm((prev) => ({
+          ...prev,
+          token: (binding.token ?? '').toString(),
+          instance_id: (binding.instance_id ?? '').toString(),
+          phone_number: (binding.phone_number ?? '').toString(),
+          whatsapp_active: binding.active !== false,
+        }))
+      } catch {
+        // ignore refetch error
+      }
     }
     await loadTenants()
+    setSavedMessage('Сохранено')
+    setTimeout(() => setSavedMessage(null), 2500)
     closeEdit()
     setActionStatus('idle')
   }
@@ -278,6 +295,9 @@ const AdminTenants = () => {
         </div>
       </div>
 
+      {savedMessage && !editOpen && (
+        <div className="info-text" style={{ color: 'var(--success)', marginBottom: 8 }}>{savedMessage}</div>
+      )}
       <div className="card">
         <div className="card-title">
           {status === 'loading' ? 'Загрузка...' : `Клиентов: ${tenants.length}`}
@@ -381,15 +401,15 @@ const AdminTenants = () => {
               <div className="settings-hint" style={{ marginBottom: 10 }}>
                 Для каждого клиента нужен свой instance_id (QR в ChatFlow) + token. Без них бот отвечать не будет.
               </div>
-              {(!editForm.token.trim() || !editForm.instance_id.trim()) && (
+              {!bindingLoading && (!editForm.token.trim() || !editForm.instance_id.trim()) && (
                 <div className="error-text" style={{ marginBottom: 8 }}>
-                  Не привязано: бот отвечать не будет.
+                  Не привязано — бот отвечать не будет.
                 </div>
               )}
               <label className="field">
                 <span className="field-label">token</span>
                 <textarea
-                  className="field-input field-input--textarea"
+                  className={`field-input field-input--textarea${actionError ? ' field-input--error' : ''}`}
                   value={editForm.token}
                   onChange={(e) =>
                     setEditForm((p) => ({ ...p, token: e.target.value }))
@@ -401,7 +421,7 @@ const AdminTenants = () => {
               <label className="field">
                 <span className="field-label">instance_id</span>
                 <input
-                  className="field-input"
+                  className={`field-input${actionError ? ' field-input--error' : ''}`}
                   type="text"
                   value={editForm.instance_id}
                   onChange={(e) =>
@@ -413,7 +433,7 @@ const AdminTenants = () => {
               <label className="field">
                 <span className="field-label">phone_number</span>
                 <input
-                  className="field-input"
+                  className={`field-input${actionError ? ' field-input--error' : ''}`}
                   type="text"
                   value={editForm.phone_number}
                   onChange={(e) =>
