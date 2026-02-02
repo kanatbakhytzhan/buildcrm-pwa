@@ -593,28 +593,22 @@ export const getTenantWhatsappBinding = async (
   if (!text) return { token: '', instance_id: '', phone_number: '', active: true }
   try {
     const data = JSON.parse(text) as unknown
+    const pickBinding = (o: Record<string, unknown>) => ({
+      token: String((o.chatflow_token ?? o.token) ?? '').trim(),
+      instance_id: String((o.chatflow_instance_id ?? o.instance_id) ?? '').trim(),
+      phone_number: String((o.phone_number as string) ?? '').trim(),
+      active: (o.active as boolean) !== false,
+    })
     if (Array.isArray(data) && data.length > 0) {
-      const first = data[0] as Record<string, unknown>
-      return {
-        token: (first.token as string) ?? '',
-        instance_id: (first.instance_id as string) ?? '',
-        phone_number: (first.phone_number as string) ?? '',
-        active: (first.active as boolean) !== false,
-      }
+      return pickBinding(data[0] as Record<string, unknown>)
     }
-    const obj = data as Record<string, unknown>
-    return {
-      token: (obj.token as string) ?? '',
-      instance_id: (obj.instance_id as string) ?? '',
-      phone_number: (obj.phone_number as string) ?? '',
-      active: (obj.active as boolean) !== false,
-    }
+    return pickBinding(data as Record<string, unknown>)
   } catch {
     return { token: '', instance_id: '', phone_number: '', active: true }
   }
 }
 
-/** PUT binding: PUT /api/admin/tenants/{id}/whatsapp. 404 → throw BINDING_404_MESSAGE. */
+/** PUT binding: PUT /api/admin/tenants/{id}/whatsapp. Body keys: chatflow_token, chatflow_instance_id, phone_number, active. */
 export const putTenantWhatsappBinding = async (
   tenantId: string | number,
   payload: {
@@ -624,6 +618,18 @@ export const putTenantWhatsappBinding = async (
     active?: boolean
   },
 ) => {
+  const chatflow_token =
+    payload.token != null ? String(payload.token).trim() : ''
+  const chatflow_instance_id =
+    payload.instance_id != null ? String(payload.instance_id).trim() : ''
+  const phone_number =
+    payload.phone_number != null ? String(payload.phone_number).trim() : ''
+  const body = {
+    chatflow_token: chatflow_token || null,
+    chatflow_instance_id: chatflow_instance_id || null,
+    phone_number: phone_number || null,
+    active: payload.active !== false,
+  }
   const url = fullUrl(`/api/admin/tenants/${tenantId}/whatsapp`)
   const response = await fetch(url, {
     method: 'PUT',
@@ -631,14 +637,36 @@ export const putTenantWhatsappBinding = async (
       'Content-Type': 'application/json',
       ...authHeaders(),
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   })
   if (response.status === 404) {
     const err = new Error(BINDING_404_MESSAGE) as ApiError
     err.status = 404
     throw err
   }
-  if (!response.ok) throw await buildError(response)
+  if (!response.ok) {
+    const text = await response.text()
+    let message = 'Не удалось сохранить привязку'
+    if (text) {
+      try {
+        const json = JSON.parse(text) as {
+          message?: string
+          detail?: string | unknown[] | unknown
+        }
+        if (typeof json.message === 'string') message = json.message
+        else if (typeof json.detail === 'string') message = json.detail
+        else if (Array.isArray(json.detail) && json.detail.length > 0) {
+          const first = json.detail[0] as { msg?: string; message?: string }
+          message = first.msg ?? first.message ?? JSON.stringify(json.detail[0])
+        } else if (json.detail != null) message = String(json.detail)
+      } catch {
+        message = text.slice(0, 200)
+      }
+    }
+    const err = new Error(message) as ApiError
+    err.status = response.status
+    throw err
+  }
   const text = await response.text()
   if (!text) return undefined
   try {

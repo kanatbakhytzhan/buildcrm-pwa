@@ -376,14 +376,14 @@ const AdminTenants = () => {
               )}
               <label className="field">
                 <span className="field-label">token</span>
-                <input
-                  className="field-input"
-                  type="text"
+                <textarea
+                  className="field-input field-input--textarea"
                   value={editForm.token}
                   onChange={(e) =>
                     setEditForm((p) => ({ ...p, token: e.target.value }))
                   }
-                  placeholder="ChatFlow token"
+                  placeholder="ChatFlow token (JWT)"
+                  rows={3}
                 />
               </label>
               <label className="field">
