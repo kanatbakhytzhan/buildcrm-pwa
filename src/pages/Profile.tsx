@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Flame, MessageCircle, RefreshCw, LogOut, ChevronRight, Lock, Inbox } from 'lucide-react'
+import { Bell, Bot, Flame, MessageCircle, RefreshCw, LogOut, ChevronRight, Lock, Inbox } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../context/LeadsContext'
 import { changePassword, getMyAiSettings, updateMyAiSettings } from '../services/api'
@@ -280,15 +280,17 @@ const Profile = () => {
         </button>
       </div>
       <div className="card settings-card">
-        <div className="card-title" style={{ marginBottom: 8 }}>AI-менеджер</div>
         <div className="settings-row settings-row--static">
           <div className="settings-left">
+            <div className="settings-icon settings-icon--primary" aria-hidden="true">
+              <Bot size={20} />
+            </div>
             <div className="settings-text">
-              <div className="settings-title">
-                {aiEnabled ? 'Включён' : 'Выключен'}
-              </div>
+              <div className="settings-title">AI-менеджер</div>
               <div className="settings-hint">
-                Когда выключено — бот не отвечает автоматически, но лиды продолжают сохраняться.
+                {aiEnabled
+                  ? 'Бот отвечает автоматически, лиды сохраняются.'
+                  : 'Бот не отвечает, но лиды сохраняются.'}
               </div>
             </div>
           </div>
@@ -305,10 +307,8 @@ const Profile = () => {
             </span>
           </label>
         </div>
-        <div className="ai-manager-hint info-text" style={{ marginTop: 10, fontSize: 12 }}>
-          Чтобы выключить AI только для одного чата — отправьте в WhatsApp команду: /stop
-          <br />
-          Чтобы включить обратно: /start
+        <div className="settings-row-help">
+          /stop — выключить в этом чате, /start — включить обратно
         </div>
       </div>
       {isAdmin && (

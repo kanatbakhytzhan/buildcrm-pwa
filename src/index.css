@@ -1760,6 +1760,14 @@ a {
   color: var(--muted);
 }
 
+.settings-row-help {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+  padding-left: 52px;
+  line-height: 1.35;
+}
+
 .settings-chevron {
   color: var(--muted);
   flex-shrink: 0;
