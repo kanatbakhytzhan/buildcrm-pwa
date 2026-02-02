@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { BASE_URL } from '../config/appConfig'
 import {
   addTenantUser,
   getAdminTenants,
@@ -44,6 +45,28 @@ const AdminTenants = () => {
   const [tenantUsersStatus, setTenantUsersStatus] = useState<'idle' | 'loading'>('idle')
   const [addUserForm, setAddUserForm] = useState({ email: '', role: 'manager' as 'manager' | 'admin' })
   const [bindingLoading, setBindingLoading] = useState(false)
+  const [webhookCopied, setWebhookCopied] = useState(false)
+
+  const getWebhookUrl = (tenant: AdminTenant | null): string => {
+    if (!tenant) return ''
+    const url = tenant.webhook_url?.trim()
+    if (url) return url
+    const key = tenant.webhook_key?.trim()
+    if (key) {
+      const base = BASE_URL.replace(/\/+$/, '')
+      return `${base}/api/webhook/chatflow?key=${encodeURIComponent(key)}`
+    }
+    return ''
+  }
+
+  const copyWebhookUrl = () => {
+    const url = getWebhookUrl(activeTenant)
+    if (!url) return
+    navigator.clipboard.writeText(url).then(() => {
+      setWebhookCopied(true)
+      setTimeout(() => setWebhookCopied(false), 2000)
+    })
+  }
 
   const loadTenants = useCallback(async () => {
     setStatus('loading')
@@ -374,6 +397,9 @@ const AdminTenants = () => {
                   <div className="settings-hint" style={{ marginTop: 4 }}>
                     Когда выключено — бот не отвечает автоматически, но лиды продолжают сохраняться.
                   </div>
+                  <div className="settings-hint" style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+                    Команды /stop, /start работают только если сообщение попадает в webhook (обычно входящие). Надёжнее выключать из CRM.
+                  </div>
                 </div>
                 <label className="switch">
                   <input
@@ -393,6 +419,29 @@ const AdminTenants = () => {
                 <div className="info-text" style={{ color: 'var(--success)' }}>{savedMessage}</div>
               )}
               <div className="dialog-text" style={{ marginTop: 12, marginBottom: 4 }}>
+                ChatFlow Webhook URL
+              </div>
+              <div className="settings-hint" style={{ marginBottom: 8 }}>
+                Вставь этот URL в ChatFlow → Send a Webhook. Без него бот не поймёт, к какому клиенту относится чат.
+              </div>
+              <div className="field" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  className="field-input"
+                  type="text"
+                  readOnly
+                  value={getWebhookUrl(activeTenant)}
+                  style={{ flex: 1, background: 'var(--bg)' }}
+                />
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={copyWebhookUrl}
+                  disabled={!getWebhookUrl(activeTenant)}
+                >
+                  {webhookCopied ? 'Скопировано' : 'Copy'}
+                </button>
+              </div>
+              <div className="dialog-text" style={{ marginTop: 12, marginBottom: 4 }}>
                 WhatsApp / ChatFlow привязка
               </div>
               {bindingLoading && (
@@ -401,11 +450,19 @@ const AdminTenants = () => {
               <div className="settings-hint" style={{ marginBottom: 10 }}>
                 Для каждого клиента нужен свой instance_id (QR в ChatFlow) + token. Без них бот отвечать не будет.
               </div>
-              {!bindingLoading && (!editForm.token.trim() || !editForm.instance_id.trim()) && (
-                <div className="error-text" style={{ marginBottom: 8 }}>
-                  Не привязано — бот отвечать не будет.
-                </div>
-              )}
+              {!bindingLoading && (() => {
+                const webhookUrl = getWebhookUrl(activeTenant)
+                const noBinding = editForm.whatsapp_active && (!editForm.token.trim() || !editForm.instance_id.trim())
+                const noWebhook = !webhookUrl
+                if (noBinding || noWebhook) {
+                  return (
+                    <div className="error-text" style={{ marginBottom: 8 }}>
+                      Не привязано — бот отвечать не будет.
+                    </div>
+                  )
+                }
+                return null
+              })()}
               <label className="field">
                 <span className="field-label">token</span>
                 <textarea

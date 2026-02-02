@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Phone, MessageCircle, MapPin, FileText, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Bot, MessageCircle, MapPin, FileText, MessageSquare, Phone } from 'lucide-react'
 import { useLeads } from '../context/LeadsContext'
 import { sanitizePhoneForTel, sanitizePhoneForWa } from '../utils/phone'
 import ThreeDotsMenu from '../components/ThreeDotsMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { getCachedLeadById } from '../services/offlineDb'
-import { getLeadComments, postLeadComment, type LeadComment } from '../services/api'
+import {
+  getLeadAiStatus,
+  getLeadComments,
+  postLeadAiMute,
+  postLeadComment,
+  type LeadComment,
+} from '../services/api'
 import { formatBadgeAlmatyFix } from '../utils/dateFormat'
 import type { NormalizedLead } from '../utils/normalizeLead'
 
@@ -29,6 +35,10 @@ const LeadDetails = () => {
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [commentSubmitting, setCommentSubmitting] = useState(false)
+  const [aiMutedInChat, setAiMutedInChat] = useState(false)
+  const [aiEnabledGlobal, setAiEnabledGlobal] = useState(true)
+  const [aiChatLoading, setAiChatLoading] = useState(false)
+  const [aiChatStatusLoading, setAiChatStatusLoading] = useState(false)
 
   useEffect(() => {
     const handleOffline = () => setIsOffline(true)
@@ -77,6 +87,35 @@ const LeadDetails = () => {
       setComments([])
     }
   }, [id, lead, loadComments])
+
+  useEffect(() => {
+    if (!id) return
+    setAiChatStatusLoading(true)
+    getLeadAiStatus(id)
+      .then((res) => {
+        setAiMutedInChat(res.ai_muted_in_chat === true)
+        setAiEnabledGlobal(res.ai_enabled_global !== false)
+      })
+      .catch(() => {
+        setAiMutedInChat(false)
+        setAiEnabledGlobal(true)
+      })
+      .finally(() => setAiChatStatusLoading(false))
+  }, [id])
+
+  const handleAiChatToggle = async (muted: boolean) => {
+    if (!id) return
+    setAiChatLoading(true)
+    try {
+      await postLeadAiMute(id, { muted })
+      setAiMutedInChat(muted)
+      showToast('Готово')
+    } catch {
+      showToast('Не удалось изменить')
+    } finally {
+      setAiChatLoading(false)
+    }
+  }
 
   const phoneValue = lead?.phone?.trim() || ''
   const phoneTel = phoneValue ? sanitizePhoneForTel(phoneValue) : ''
@@ -299,6 +338,38 @@ const LeadDetails = () => {
                   {commentSubmitting ? 'Отправка…' : 'Добавить'}
                 </button>
               </form>
+            </div>
+          </div>
+          <div className="card settings-card" style={{ marginTop: 12 }}>
+            <div className="settings-row settings-row--static">
+              <div className="settings-left">
+                <div className="settings-icon settings-icon--primary" aria-hidden="true">
+                  <Bot size={20} />
+                </div>
+                <div className="settings-text">
+                  <div className="settings-title">AI в этом чате</div>
+                  <div className="settings-hint">
+                    Когда выключено — бот не отвечает в этом чате, но лиды продолжают сохраняться.
+                  </div>
+                  {!aiEnabledGlobal && (
+                    <div className="settings-hint" style={{ color: 'var(--danger)', marginTop: 4 }}>
+                      AI выключен для всего клиента в настройках.
+                    </div>
+                  )}
+                </div>
+              </div>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  aria-label="AI в этом чате"
+                  checked={!aiMutedInChat}
+                  disabled={aiChatLoading || aiChatStatusLoading || !aiEnabledGlobal}
+                  onChange={(e) => handleAiChatToggle(e.target.checked ? false : true)}
+                />
+                <span className="switch-track">
+                  <span className="switch-thumb" />
+                </span>
+              </label>
             </div>
           </div>
           <div className="details-sticky">

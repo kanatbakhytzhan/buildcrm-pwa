@@ -271,6 +271,44 @@ export const deleteLead = async (id: string) => {
   })
 }
 
+/** GET /api/leads/{lead_id}/ai-status. 404 → default (not muted, global on). */
+export const getLeadAiStatus = async (
+  leadId: string,
+): Promise<{ ai_muted_in_chat?: boolean; ai_enabled_global?: boolean }> => {
+  const url = fullUrl(`/api/leads/${leadId}/ai-status`)
+  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  if (response.status === 404) {
+    return { ai_muted_in_chat: false, ai_enabled_global: true }
+  }
+  if (!response.ok) throw await buildError(response)
+  const text = await response.text()
+  if (!text) return { ai_muted_in_chat: false, ai_enabled_global: true }
+  try {
+    const obj = JSON.parse(text) as { ai_muted_in_chat?: boolean; ai_enabled_global?: boolean }
+    return {
+      ai_muted_in_chat: obj.ai_muted_in_chat === true,
+      ai_enabled_global: obj.ai_enabled_global !== false,
+    }
+  } catch {
+    return { ai_muted_in_chat: false, ai_enabled_global: true }
+  }
+}
+
+/** POST /api/leads/{lead_id}/ai-mute { muted: boolean } */
+export const postLeadAiMute = async (
+  leadId: string,
+  payload: { muted: boolean },
+) => {
+  return request<unknown>(`/api/leads/${leadId}/ai-mute`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
 export type LeadComment = {
   id: string | number
   lead_id?: string | number
@@ -472,6 +510,9 @@ export type AdminTenant = {
   default_owner_user_id?: number | null
   ai_prompt?: string | null
   ai_enabled?: boolean
+  /** ChatFlow webhook: full URL or key to build URL */
+  webhook_url?: string | null
+  webhook_key?: string | null
   /** ChatFlow / WhatsApp binding */
   token?: string | null
   instance_id?: string | null

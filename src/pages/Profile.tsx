@@ -290,6 +290,9 @@ const Profile = () => {
               <div className="settings-hint">
                 Когда выключено — бот не отвечает автоматически, но лиды продолжают сохраняться.
               </div>
+              <div className="settings-hint" style={{ marginTop: 4, fontSize: 12, opacity: 0.85 }}>
+                Команды /stop, /start работают только если сообщение попадает в webhook (обычно входящие). Надёжнее выключать из CRM.
+              </div>
             </div>
           </div>
           <label className="switch">
@@ -309,6 +312,11 @@ const Profile = () => {
           Отключить в одном чате: /stop. Включить: /start.
         </div>
       </div>
+      {!isAdmin && outboxCount > 0 && (
+        <div className="settings-row-help" style={{ marginBottom: 8 }}>
+          В очереди: {outboxCount} действий. Отправка при появлении сети.
+        </div>
+      )}
       {isAdmin && (
         <>
           <button
