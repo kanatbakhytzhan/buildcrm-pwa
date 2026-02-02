@@ -170,6 +170,32 @@ export const changePassword = async (payload: {
   })
 }
 
+/** Current user AI settings. GET /api/me/ai-settings */
+export const getMyAiSettings = async (): Promise<{ ai_enabled: boolean }> => {
+  const data = await request<unknown>('/api/me/ai-settings', {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  const obj = (data ?? {}) as { ai_enabled?: boolean }
+  return { ai_enabled: obj.ai_enabled !== false }
+}
+
+/** Update current user AI settings. PATCH /api/me/ai-settings */
+export const updateMyAiSettings = async (
+  ai_enabled: boolean,
+): Promise<{ ai_enabled: boolean }> => {
+  const data = await request<unknown>('/api/me/ai-settings', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ ai_enabled }),
+  })
+  const obj = (data ?? {}) as { ai_enabled?: boolean }
+  return { ai_enabled: obj.ai_enabled !== false }
+}
+
 /** Health check for diagnostics (GET /api/health) */
 export const checkApiHealth = async (): Promise<{ ok: boolean; message: string }> => {
   const url = fullUrl('/api/health')

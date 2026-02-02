@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, Flame, MessageCircle, RefreshCw, LogOut, ChevronRight, Lock, Inbox } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../context/LeadsContext'
-import { changePassword } from '../services/api'
+import { changePassword, getMyAiSettings, updateMyAiSettings } from '../services/api'
 import type { OutboxEntry } from '../services/offlineDb'
 
 const NOTIFICATIONS_KEY = 'buildcrm_notifications_enabled'
@@ -49,6 +49,9 @@ const Profile = () => {
     const stored = localStorage.getItem(NOTIFICATIONS_KEY)
     return stored === null ? true : stored === 'true'
   })
+  const [aiEnabled, setAiEnabled] = useState(true)
+  const [aiSettingsLoading, setAiSettingsLoading] = useState(false)
+  const [aiToggleLoading, setAiToggleLoading] = useState(false)
 
   const handleNotificationsChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextValue = event.target.checked
@@ -96,6 +99,40 @@ const Profile = () => {
       loadOutboxItems()
     }
   }, [outboxOpen, loadOutboxItems])
+
+  useEffect(() => {
+    let active = true
+    setAiSettingsLoading(true)
+    getMyAiSettings()
+      .then((res) => {
+        if (active) setAiEnabled(res.ai_enabled)
+      })
+      .catch(() => {
+        if (active) setAiEnabled(true)
+      })
+      .finally(() => {
+        if (active) setAiSettingsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const handleAiToggle = async (nextEnabled: boolean) => {
+    const prev = aiEnabled
+    setAiToggleLoading(true)
+    setAiEnabled(nextEnabled)
+    try {
+      await updateMyAiSettings(nextEnabled)
+      showToast('Сохранено')
+    } catch (err) {
+      setAiEnabled(prev)
+      const msg = err instanceof Error ? err.message : 'Ошибка сохранения'
+      showToast(msg)
+    } finally {
+      setAiToggleLoading(false)
+    }
+  }
 
   const handleRetrySync = async () => {
     setOutboxLoading(true)
@@ -241,6 +278,38 @@ const Profile = () => {
           </div>
           <ChevronRight size={20} className="settings-chevron" />
         </button>
+      </div>
+      <div className="card settings-card">
+        <div className="card-title" style={{ marginBottom: 8 }}>AI-менеджер</div>
+        <div className="settings-row settings-row--static">
+          <div className="settings-left">
+            <div className="settings-text">
+              <div className="settings-title">
+                {aiEnabled ? 'Включён' : 'Выключен'}
+              </div>
+              <div className="settings-hint">
+                Когда выключено — бот не отвечает автоматически, но лиды продолжают сохраняться.
+              </div>
+            </div>
+          </div>
+          <label className="switch">
+            <input
+              type="checkbox"
+              aria-label="AI-менеджер"
+              checked={aiEnabled}
+              disabled={aiSettingsLoading || aiToggleLoading}
+              onChange={(e) => handleAiToggle(e.target.checked)}
+            />
+            <span className="switch-track">
+              <span className="switch-thumb" />
+            </span>
+          </label>
+        </div>
+        <div className="ai-manager-hint info-text" style={{ marginTop: 10, fontSize: 12 }}>
+          Чтобы выключить AI только для одного чата — отправьте в WhatsApp команду: /stop
+          <br />
+          Чтобы включить обратно: /start
+        </div>
       </div>
       {isAdmin && (
         <>
