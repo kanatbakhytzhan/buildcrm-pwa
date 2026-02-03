@@ -1852,3 +1852,28 @@ a {
   text-align: center;
   padding: 24px !important;
 }
+.v2-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 20px;
+  background: var(--text);
+  color: var(--card);
+  border-radius: var(--radius-btn);
+  font-size: 14px;
+  z-index: 1000;
+  box-shadow: var(--shadow-md);
+}
+.v2-leads-status-select {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  background: var(--card);
+  cursor: pointer;
+}
+.v2-leads-open-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+}

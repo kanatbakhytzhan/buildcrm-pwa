@@ -1,13 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getV2LeadsTable, type V2LeadTableRow } from '../services/api'
+import { getV2LeadsTable, updateLeadStatus, type V2LeadTableRow } from '../services/api'
 
-const COLS = ['#', 'Имя', 'Телефон', 'Город', 'Объект', 'Площадь', 'Статус', 'Дата'] as const
+const COLS = ['#', 'Имя', 'Телефон', 'Город', 'Объект', 'Площадь', 'Статус', 'Дата', 'Действия'] as const
 
-function cellLeadNumber(row: V2LeadTableRow): string {
-  const n = row.lead_number
-  if (n == null) return '—'
-  return String(n)
+const STATUS_OPTIONS = [
+  { value: 'new', label: 'new' },
+  { value: 'in_progress', label: 'in_progress' },
+  { value: 'done', label: 'done' },
+  { value: 'cancelled', label: 'cancelled' },
+] as const
+
+type StatusValue = (typeof STATUS_OPTIONS)[number]['value']
+
+function cellNum(row: V2LeadTableRow): string {
+  const num = row.lead_number ?? row.id
+  if (num == null || num === '') return '—'
+  return String(num)
+}
+
+function statusForSelect(s: string | null | undefined): StatusValue {
+  if (s === 'success') return 'done'
+  if (s === 'failed') return 'cancelled'
+  if (s === 'new' || s === 'in_progress' || s === 'done' || s === 'cancelled') return s
+  return 'new'
 }
 
 function cellText(value: string | null | undefined): string {
@@ -35,6 +52,14 @@ const LeadsTableV2 = () => {
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [toast, setToast] = useState<string | null>(null)
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | number | null>(null)
+
+  useEffect(() => {
+    if (!toast) return
+    const t = window.setTimeout(() => setToast(null), 2500)
+    return () => window.clearTimeout(t)
+  }, [toast])
 
   const load = useCallback(async () => {
     setStatus('loading')
@@ -66,6 +91,34 @@ const LeadsTableV2 = () => {
   }, [rows, search])
 
   const handleRowClick = (row: V2LeadTableRow) => {
+    const id = row.id != null ? String(row.id) : ''
+    if (id) navigate(`/leads/${id}`)
+  }
+
+  const mapStatusToApi = (v: StatusValue): 'new' | 'success' | 'failed' => {
+    if (v === 'done') return 'success'
+    if (v === 'cancelled') return 'failed'
+    return 'new'
+  }
+
+  const handleStatusChange = async (row: V2LeadTableRow, newValue: StatusValue) => {
+    const id = row.id != null ? String(row.id) : ''
+    if (!id) return
+    setStatusUpdatingId(row.id)
+    try {
+      await updateLeadStatus(id, mapStatusToApi(newValue))
+      setRows((prev) =>
+        prev.map((r) => (r.id === row.id ? { ...r, status: newValue } : r))
+      )
+    } catch {
+      setToast('Пока недоступно')
+    } finally {
+      setStatusUpdatingId(null)
+    }
+  }
+
+  const handleOpen = (e: React.MouseEvent, row: V2LeadTableRow) => {
+    e.stopPropagation()
     const id = row.id != null ? String(row.id) : ''
     if (id) navigate(`/leads/${id}`)
   }
@@ -108,6 +161,12 @@ const LeadsTableV2 = () => {
         </div>
       )}
 
+      {toast && (
+        <div className="v2-toast" role="status">
+          {toast}
+        </div>
+      )}
+
       <div className="card v2-leads-card">
         {status === 'loading' ? (
           <div className="info-text">Загрузка…</div>
@@ -135,14 +194,38 @@ const LeadsTableV2 = () => {
                       onClick={() => handleRowClick(row)}
                       className="v2-leads-row"
                     >
-                      <td>{cellLeadNumber(row)}</td>
+                      <td>{cellNum(row)}</td>
                       <td>{cellText(row.name)}</td>
                       <td>{cellText(row.phone)}</td>
                       <td>{cellText(row.city)}</td>
                       <td>{cellText(row.object)}</td>
                       <td>{cellText(row.area)}</td>
-                      <td>{cellText(row.status)}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <select
+                          className="v2-leads-status-select"
+                          value={statusForSelect(row.status)}
+                          disabled={statusUpdatingId === row.id}
+                          onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                            handleStatusChange(row, e.target.value as StatusValue)
+                          }
+                        >
+                          {STATUS_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       <td>{cellDate(row)}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="secondary-button v2-leads-open-btn"
+                          onClick={(e) => handleOpen(e, row)}
+                        >
+                          Открыть
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
