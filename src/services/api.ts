@@ -241,6 +241,37 @@ export const getLeads = async (): Promise<{ raw: unknown; leads: unknown[] }> =>
   return { raw: data, leads }
 }
 
+/** Row for v2 leads table. GET /api/v2/leads/table */
+export type V2LeadTableRow = {
+  id: string | number
+  lead_number?: number | null
+  name?: string | null
+  phone?: string | null
+  city?: string | null
+  object?: string | null
+  area?: string | null
+  status?: string | null
+  date?: string | null
+  created_at?: string | null
+}
+
+const extractV2LeadsTable = (data: unknown): V2LeadTableRow[] => {
+  if (Array.isArray(data)) return data as V2LeadTableRow[]
+  const obj = data as { items?: unknown[]; leads?: unknown[]; data?: unknown[] }
+  if (Array.isArray(obj?.items)) return obj.items as V2LeadTableRow[]
+  if (Array.isArray(obj?.leads)) return obj.leads as V2LeadTableRow[]
+  if (Array.isArray(obj?.data)) return obj.data as V2LeadTableRow[]
+  return []
+}
+
+export const getV2LeadsTable = async (): Promise<V2LeadTableRow[]> => {
+  const data = await request<unknown>('/api/v2/leads/table', {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  return extractV2LeadsTable(data)
+}
+
 export const getLead = async (id: string) => {
   return request<unknown>(`/api/leads/${id}`, {
     method: 'GET',

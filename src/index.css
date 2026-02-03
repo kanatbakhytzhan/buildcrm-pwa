@@ -1802,3 +1802,53 @@ a {
 .logout-card .logout-icon {
   flex-shrink: 0;
 }
+
+/* CRM v2 — leads table (desktop-first) */
+.v2-leads-page {
+  max-width: 100%;
+}
+.v2-leads-header {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.v2-leads-toolbar {
+  margin-bottom: 12px;
+}
+.v2-leads-card {
+  overflow-x: auto;
+}
+.v2-leads-table-wrap {
+  min-width: 720px;
+}
+.v2-leads-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.v2-leads-table th,
+.v2-leads-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.v2-leads-table th {
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+  white-space: nowrap;
+}
+.v2-leads-table td {
+  vertical-align: middle;
+}
+.v2-leads-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.v2-leads-row:hover {
+  background: rgba(29, 78, 216, 0.06);
+}
+.v2-leads-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 24px !important;
+}

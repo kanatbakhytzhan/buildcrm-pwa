@@ -13,6 +13,8 @@ import Profile from './pages/Profile'
 import AdminLogin from './pages/AdminLogin'
 import AdminUsers from './pages/AdminUsers'
 import AdminTenants from './pages/AdminTenants'
+import LeadsTableV2 from './pages/LeadsTableV2'
+import { CRM_V2_ENABLED } from './config/appConfig'
 
 const AppLayout = () => {
   const { toastMessage, clearToast } = useLeads()
@@ -81,6 +83,9 @@ const App = () => {
       <Route element={<RequireAdminAuth />}>
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/tenants" element={<AdminTenants />} />
+        {CRM_V2_ENABLED && (
+          <Route path="/v2/leads-table" element={<LeadsTableV2 />} />
+        )}
       </Route>
     </Routes>
   )

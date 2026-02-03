@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { CRM_V2_ENABLED } from '../config/appConfig'
 import {
   createAdminUser,
   getAdminUsers,
@@ -189,6 +190,15 @@ const AdminUsers = () => {
           >
             Клиенты
           </button>
+          {CRM_V2_ENABLED && (
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => navigate('/v2/leads-table')}
+            >
+              CRM v2 (таблица)
+            </button>
+          )}
           <button
             className="ghost-button"
             type="button"

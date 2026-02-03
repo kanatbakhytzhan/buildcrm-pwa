@@ -24,3 +24,7 @@ export const APP_BUILD_ID =
 export const isDebugMode = () =>
   import.meta.env.DEV ||
   (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug'))
+
+/** CRM v2 (leads table) feature flag. Default false. */
+const envCrmV2 = (import.meta.env.VITE_CRM_V2_ENABLED as string | undefined)?.trim()?.toLowerCase()
+export const CRM_V2_ENABLED = envCrmV2 === 'true' || envCrmV2 === '1'
