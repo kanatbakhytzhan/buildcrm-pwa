@@ -256,12 +256,19 @@ export type V2LeadTableRow = {
 }
 
 const extractV2LeadsTable = (data: unknown): V2LeadTableRow[] => {
-  if (Array.isArray(data)) return data as V2LeadTableRow[]
-  const obj = data as { items?: unknown[]; leads?: unknown[]; data?: unknown[] }
-  if (Array.isArray(obj?.items)) return obj.items as V2LeadTableRow[]
-  if (Array.isArray(obj?.leads)) return obj.leads as V2LeadTableRow[]
-  if (Array.isArray(obj?.data)) return obj.data as V2LeadTableRow[]
-  return []
+  const json = data
+  const list = Array.isArray(json)
+    ? json
+    : (json && typeof json === 'object')
+      ? (json as Record<string, unknown>).leads ??
+        (json as Record<string, unknown>).items ??
+        (json as Record<string, unknown>).data ??
+        []
+      : []
+  const arr = Array.isArray(list) ? list : []
+  console.log('leads response', json)
+  console.log('leads list length', arr.length)
+  return arr as V2LeadTableRow[]
 }
 
 export const getV2LeadsTable = async (): Promise<V2LeadTableRow[]> => {
