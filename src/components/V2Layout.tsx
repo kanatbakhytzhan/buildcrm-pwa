@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { V2RealtimeProvider } from '../context/V2RealtimeContext'
 
 const V2Layout = () => {
   const { userRole, isAdmin } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [realtimeToast, setRealtimeToast] = useState<string | null>(null)
   const showFullMenu = isAdmin || userRole === 'owner' || userRole === 'rop'
+
+  const onNewLeadToast = useCallback((message: string) => {
+    setRealtimeToast(message)
+  }, [])
 
   useEffect(() => {
     const root = document.getElementById('root')
@@ -15,6 +21,12 @@ const V2Layout = () => {
       root.classList.remove('v2-route')
     }
   }, [])
+
+  useEffect(() => {
+    if (!realtimeToast) return
+    const t = setTimeout(() => setRealtimeToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [realtimeToast])
 
   return (
     <div className="v2-layout">
@@ -41,10 +53,23 @@ const V2Layout = () => {
           <NavLink
             to="/v2/leads-table"
             className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
-            end
             onClick={() => setSidebarOpen(false)}
           >
-            Лиды
+            Таблица
+          </NavLink>
+          <NavLink
+            to="/v2/pipeline"
+            className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            Воронка
+          </NavLink>
+          <NavLink
+            to="/v2/tasks"
+            className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            Задачи
           </NavLink>
           {showFullMenu && (
             <>
@@ -83,8 +108,15 @@ const V2Layout = () => {
         </nav>
       </aside>
       <main className="v2-main">
-        <Outlet />
+        <V2RealtimeProvider onNewLeadToast={onNewLeadToast}>
+          <Outlet />
+        </V2RealtimeProvider>
       </main>
+      {realtimeToast && (
+        <div className="v2-toast" role="status" style={{ position: 'fixed' }}>
+          {realtimeToast}
+        </div>
+      )}
     </div>
   )
 }

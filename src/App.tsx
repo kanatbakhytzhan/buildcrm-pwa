@@ -14,6 +14,8 @@ import AdminLogin from './pages/AdminLogin'
 import AdminUsers from './pages/AdminUsers'
 import AdminTenants from './pages/AdminTenants'
 import LeadsTableV2 from './pages/LeadsTableV2'
+import PipelinePage from './pages/PipelinePage'
+import TasksPage from './pages/TasksPage'
 import V2Layout from './components/V2Layout'
 import { CRM_V2_ENABLED } from './config/appConfig'
 
@@ -87,6 +89,8 @@ const App = () => {
         {CRM_V2_ENABLED && (
           <Route path="/v2" element={<V2Layout />}>
             <Route path="leads-table" element={<LeadsTableV2 />} />
+            <Route path="pipeline" element={<PipelinePage />} />
+            <Route path="tasks" element={<TasksPage />} />
           </Route>
         )}
       </Route>

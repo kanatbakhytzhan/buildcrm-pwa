@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useV2RealtimeRefetch } from '../context/V2RealtimeContext'
 import {
   assignLead,
   bulkAssignLeads,
@@ -10,7 +11,6 @@ import {
   getTenantUsers,
   getV2LeadsTable,
   updateLeadFields,
-  updateLeadStatus,
   type TenantUser,
   type V2LeadTableRow,
 } from '../services/api'
@@ -49,20 +49,6 @@ function statusForSelect(s: string | null | undefined): StatusValue {
 function cellText(value: string | null | undefined): string {
   if (value == null || value === '') return '—'
   return String(value).trim()
-}
-
-function cellDate(row: V2LeadTableRow): string {
-  const raw = row.date ?? row.created_at
-  if (raw == null || raw === '') return '—'
-  const s = String(raw).trim()
-  if (!s) return '—'
-  try {
-    const d = new Date(s)
-    if (Number.isNaN(d.getTime())) return s
-    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  } catch {
-    return s
-  }
 }
 
 /** "02 фев, 14:21" */
@@ -114,7 +100,6 @@ const LeadsTableV2 = () => {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState<string | null>(null)
-  const [statusUpdatingId, setStatusUpdatingId] = useState<string | number | null>(null)
   const [managers, setManagers] = useState<TenantUser[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set())
   const [bulkManagerId, setBulkManagerId] = useState<string | number>('')
@@ -154,6 +139,8 @@ const LeadsTableV2 = () => {
   useEffect(() => {
     load()
   }, [load])
+
+  useV2RealtimeRefetch(load)
 
   useEffect(() => {
     if (!canAssign) return
@@ -237,29 +224,6 @@ const LeadsTableV2 = () => {
   const handleRowClick = (row: V2LeadTableRow) => {
     const id = row.id != null ? String(row.id) : ''
     if (id) navigate(`/leads/${id}`)
-  }
-
-  const mapStatusToApi = (v: StatusValue): 'new' | 'success' | 'failed' => {
-    if (v === 'done') return 'success'
-    if (v === 'cancelled') return 'failed'
-    return 'new'
-  }
-
-  const handleStatusChange = async (row: V2LeadTableRow, newValue: StatusValue) => {
-    const id = row.id != null ? String(row.id) : ''
-    if (!id) return
-    setStatusUpdatingId(row.id)
-    try {
-      await updateLeadStatus(id, mapStatusToApi(newValue))
-      setRows((prev) =>
-        prev.map((r) => (r.id === row.id ? { ...r, status: newValue } : r))
-      )
-    } catch (err) {
-      const e = err as { status?: number }
-      setToast(e?.status === 401 || e?.status === 403 ? 'Недостаточно прав' : 'Пока недоступно')
-    } finally {
-      setStatusUpdatingId(null)
-    }
   }
 
   const handleAssignChange = async (row: V2LeadTableRow, assignedToId: string | number | null) => {

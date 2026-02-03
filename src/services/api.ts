@@ -1067,3 +1067,208 @@ export const addTenantUser = async (
     body: JSON.stringify(payload),
   })
 }
+
+/* --- CRM v2 Pro: Pipelines, Tasks, SSE --- */
+
+export type PipelineStage = {
+  id: string | number
+  name: string
+  order?: number
+}
+
+export type Pipeline = {
+  id: string | number
+  name?: string
+  is_default?: boolean
+  stages?: PipelineStage[]
+}
+
+export type PipelineLead = {
+  id: string | number
+  name?: string | null
+  phone?: string | null
+  city?: string | null
+  object?: string | null
+  area?: string | null
+  status?: string | null
+  stage_id?: string | number | null
+  assigned_to_id?: string | number | null
+  assigned_to_name?: string | null
+  last_comment?: string | null
+  created_at?: string | null
+  date?: string | null
+}
+
+export type LeadTask = {
+  id: string | number
+  lead_id: string | number
+  lead_name?: string | null
+  type?: string
+  due_at: string
+  done?: boolean
+  comment?: string | null
+  created_at?: string | null
+}
+
+function extractPipelines(data: unknown): Pipeline[] {
+  if (Array.isArray(data)) return data as Pipeline[]
+  const o = data as { pipelines?: unknown[]; data?: unknown[] }
+  if (Array.isArray(o?.pipelines)) return o.pipelines as Pipeline[]
+  if (Array.isArray(o?.data)) return o.data as Pipeline[]
+  return []
+}
+
+export const getPipelines = async (): Promise<Pipeline[]> => {
+  const data = await request<unknown>('/api/pipelines', {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  return extractPipelines(data ?? [])
+}
+
+/** GET /api/leads — for pipeline Kanban (includes stage_id when backend supports it). */
+export const getLeadsForPipeline = async (): Promise<PipelineLead[]> => {
+  const data = await request<unknown>('/api/leads', {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  const leads = Array.isArray((data as { leads?: unknown[] })?.leads)
+    ? (data as { leads: unknown[] }).leads
+    : Array.isArray(data)
+      ? data
+      : []
+  return leads as PipelineLead[]
+}
+
+/** PATCH /api/leads/{id}/stage — move lead to stage. */
+export const patchLeadStage = async (
+  leadId: string,
+  stageId: string | number,
+): Promise<unknown> => {
+  return request<unknown>(`/api/leads/${leadId}/stage`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ stage_id: stageId }),
+  })
+}
+
+function extractTasks(data: unknown): LeadTask[] {
+  if (Array.isArray(data)) return data as LeadTask[]
+  const o = data as { tasks?: unknown[]; items?: unknown[]; data?: unknown[] }
+  if (Array.isArray(o?.tasks)) return o.tasks as LeadTask[]
+  if (Array.isArray(o?.items)) return o.items as LeadTask[]
+  if (Array.isArray(o?.data)) return o.data as LeadTask[]
+  return []
+}
+
+/** GET /api/tasks — filter: today | overdue | week. Manager sees own, rop/owner see tenant. */
+export const getTasks = async (
+  filter: 'today' | 'overdue' | 'week' = 'today',
+): Promise<LeadTask[]> => {
+  const data = await request<unknown>(`/api/tasks?filter=${filter}`, {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  return extractTasks(data ?? [])
+}
+
+/** POST /api/leads/{id}/tasks — create call task. */
+export const createLeadTask = async (
+  leadId: string,
+  payload: { due_at: string; comment?: string; type?: string },
+): Promise<LeadTask> => {
+  const data = await request<unknown>(`/api/leads/${leadId}/tasks`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ ...payload, type: payload.type ?? 'call' }),
+  })
+  return (data ?? {}) as LeadTask
+}
+
+/** PATCH /api/tasks/{id}/complete — mark task done. */
+export const completeTask = async (taskId: string | number): Promise<unknown> => {
+  return request<unknown>(`/api/tasks/${taskId}/complete`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ done: true }),
+  })
+}
+
+/** PATCH/PUT pipeline stages (reorder, rename, add). */
+export const updatePipelineStages = async (
+  pipelineId: string | number,
+  stages: { id?: string | number; name: string; order?: number }[],
+): Promise<unknown> => {
+  return request<unknown>(`/api/pipelines/${pipelineId}/stages`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ stages }),
+  })
+}
+
+/** SSE: subscribe to events. On lead_created call onLeadCreated(payload). On error/close use polling. */
+export function subscribeEvents(options: {
+  onLeadCreated: (payload: { name?: string; city?: string; id?: string | number }) => void
+  onError: () => void
+}): () => void {
+  const token = getToken()
+  const url = fullUrl(`/api/events/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`)
+  let cancelled = false
+  let pollTimer: ReturnType<typeof setTimeout> | null = null
+  const POLL_MS = 45000
+
+  const startPolling = () => {
+    if (cancelled || pollTimer) return
+    pollTimer = setTimeout(() => {
+      pollTimer = null
+      options.onLeadCreated({})
+      startPolling()
+    }, POLL_MS)
+  }
+
+  try {
+    const es = new EventSource(url)
+    es.onmessage = (event) => {
+      if (cancelled) return
+      try {
+        const data = JSON.parse(event.data || '{}') as { type?: string; payload?: unknown }
+        if (data.type === 'lead_created' && data.payload) {
+          const p = data.payload as { name?: string; city?: string; id?: string | number }
+          options.onLeadCreated(p)
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+    es.onerror = () => {
+      es.close()
+      if (!cancelled) {
+        options.onError()
+        startPolling()
+      }
+    }
+    return () => {
+      cancelled = true
+      es.close()
+      if (pollTimer) clearTimeout(pollTimer)
+    }
+  } catch {
+    startPolling()
+    return () => {
+      cancelled = true
+      if (pollTimer) clearTimeout(pollTimer)
+    }
+  }
+}

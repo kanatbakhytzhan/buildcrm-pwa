@@ -9,6 +9,7 @@ import ThreeDotsMenu from '../components/ThreeDotsMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { getCachedLeadById } from '../services/offlineDb'
 import {
+  createLeadTask,
   getLeadAiStatus,
   getLeadComments,
   postLeadAiMute,
@@ -46,6 +47,9 @@ const LeadDetails = () => {
   const [aiChatStatusLoading, setAiChatStatusLoading] = useState(false)
   const [aiMuteError, setAiMuteError] = useState<string | null>(null)
   const [leadHasNoTenantId, setLeadHasNoTenantId] = useState(false)
+  const [taskDueAt, setTaskDueAt] = useState('')
+  const [taskComment, setTaskComment] = useState('')
+  const [taskSubmitting, setTaskSubmitting] = useState(false)
 
   useEffect(() => {
     const handleOffline = () => setIsOffline(true)
@@ -212,6 +216,32 @@ const LeadDetails = () => {
     navigate('/leads')
   }
 
+  const handleCreateTask = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!id?.trim() || !taskDueAt.trim()) {
+      showToast('Укажите дату и время')
+      return
+    }
+    setTaskSubmitting(true)
+    setActionError(null)
+    try {
+      await createLeadTask(id.trim(), {
+        due_at: new Date(taskDueAt).toISOString(),
+        comment: taskComment.trim() || undefined,
+        type: 'call',
+      })
+      showToast('Задача создана')
+      setTaskDueAt('')
+      setTaskComment('')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Не удалось создать задачу'
+      showToast(msg)
+      setActionError(msg)
+    } finally {
+      setTaskSubmitting(false)
+    }
+  }
+
   const handleAddComment = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const trimmed = commentText.trim()
@@ -306,6 +336,43 @@ const LeadDetails = () => {
               tenant_id: отсутствует
             </div>
           )}
+          <div className="details-section details-section--with-icon">
+            <div className="details-section-icon details-section-icon--orange">
+              <Phone size={18} />
+            </div>
+            <div className="details-section-body" style={{ flex: 1 }}>
+              <div className="details-section-title">ЗАПЛАНИРОВАТЬ ЗВОНОК</div>
+              <form className="comment-form" onSubmit={handleCreateTask} style={{ gap: 10 }}>
+                <label className="field">
+                  <span className="field-label">Дата и время</span>
+                  <input
+                    className="field-input"
+                    type="datetime-local"
+                    value={taskDueAt}
+                    onChange={(e) => setTaskDueAt(e.target.value)}
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">Комментарий (необязательно)</span>
+                  <input
+                    className="field-input"
+                    type="text"
+                    value={taskComment}
+                    onChange={(e) => setTaskComment(e.target.value)}
+                    placeholder="Напомнить о…"
+                  />
+                </label>
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={taskSubmitting}
+                >
+                  {taskSubmitting ? 'Создание…' : 'Создать задачу'}
+                </button>
+              </form>
+            </div>
+          </div>
           <div className="details-section details-section--with-icon">
             <div className="details-section-icon details-section-icon--blue">
               <MapPin size={18} />
