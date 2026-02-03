@@ -257,6 +257,7 @@ export type V2LeadTableRow = {
   assigned_to_name?: string | null
   next_call_at?: string | null
   tenant_id?: string | number | null
+  last_comment?: string | null
 }
 
 /** Current user (GET /api/me or /api/auth/me). For role-based UI. */

@@ -16,13 +16,20 @@ import {
 const BASE_COLS = ['#', 'Имя', 'Телефон', 'Город', 'Объект', 'Площадь', 'Статус'] as const
 
 const STATUS_OPTIONS = [
-  { value: 'new', label: 'new' },
-  { value: 'in_progress', label: 'in_progress' },
-  { value: 'done', label: 'done' },
-  { value: 'cancelled', label: 'cancelled' },
+  { value: 'new', label: 'Новый' },
+  { value: 'in_progress', label: 'В работе' },
+  { value: 'done', label: 'Закрыт' },
+  { value: 'cancelled', label: 'Отказ' },
 ] as const
 
 type StatusValue = (typeof STATUS_OPTIONS)[number]['value']
+
+const STATUS_LABELS: Record<StatusValue, string> = {
+  new: 'Новый',
+  in_progress: 'В работе',
+  done: 'Закрыт',
+  cancelled: 'Отказ',
+}
 
 function cellNum(row: V2LeadTableRow): string {
   const num = row.lead_number ?? row.id
@@ -54,6 +61,29 @@ function cellDate(row: V2LeadTableRow): string {
   } catch {
     return s
   }
+}
+
+/** "02 фев, 14:21" */
+function cellDateShort(row: V2LeadTableRow): string {
+  const raw = row.date ?? row.created_at
+  if (raw == null || raw === '') return '—'
+  try {
+    const d = new Date(String(raw))
+    if (Number.isNaN(d.getTime())) return '—'
+    const day = d.getDate()
+    const month = d.toLocaleDateString('ru-RU', { month: 'short' }).replace('.', '')
+    const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    return `${String(day).padStart(2, '0')} ${month}, ${time}`
+  } catch {
+    return '—'
+  }
+}
+
+function commentPreview(value: string | null | undefined, maxLen = 50): string {
+  if (value == null || value === '') return '—'
+  const s = String(value).trim()
+  if (s.length <= maxLen) return s
+  return `${s.slice(0, maxLen)}…`
 }
 
 function formatDateTimeLocal(iso: string | null | undefined): string {
@@ -93,6 +123,10 @@ const LeadsTableV2 = () => {
   const [filterMineOnly, setFilterMineOnly] = useState(false)
   const [assignUpdatingId, setAssignUpdatingId] = useState<string | number | null>(null)
   const [nextCallUpdatingId, setNextCallUpdatingId] = useState<string | number | null>(null)
+  const [sortBy, setSortBy] = useState<'date' | 'status'>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 20
 
   useEffect(() => {
     if (!toast) return
@@ -145,8 +179,26 @@ const LeadsTableV2 = () => {
     if (filterMineOnly && userId != null) {
       list = list.filter((r) => r.assigned_to_id != null && String(r.assigned_to_id) === String(userId))
     }
-    return list
-  }, [rows, search, filterStatus, filterUnassignedOnly, filterMineOnly, userId])
+    const statusOrder: Record<string, number> = { new: 0, in_progress: 1, done: 2, cancelled: 3 }
+    const sorted = [...list].sort((a, b) => {
+      if (sortBy === 'date') {
+        const da = new Date(a.date ?? a.created_at ?? 0).getTime()
+        const db = new Date(b.date ?? b.created_at ?? 0).getTime()
+        return sortDir === 'asc' ? da - db : db - da
+      }
+      const sa = statusOrder[statusForSelect(a.status)] ?? 0
+      const sb = statusOrder[statusForSelect(b.status)] ?? 0
+      return sortDir === 'asc' ? sa - sb : sb - sa
+    })
+    return sorted
+  }, [rows, search, filterStatus, filterUnassignedOnly, filterMineOnly, userId, sortBy, sortDir])
+
+  const totalFiltered = filtered.length
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, page])
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE))
 
   const toggleSelect = (id: string | number) => {
     setSelectedIds((prev) => {
@@ -256,6 +308,35 @@ const LeadsTableV2 = () => {
     if (id) navigate(`/leads/${id}`)
   }
 
+  const handleCall = (e: React.MouseEvent, phone: string | null | undefined) => {
+    e.stopPropagation()
+    const p = (phone ?? '').trim().replace(/\D/g, '')
+    if (p) window.open(`tel:${p}`, '_self')
+  }
+
+  const handleWhatsApp = (e: React.MouseEvent, phone: string | null | undefined) => {
+    e.stopPropagation()
+    const p = (phone ?? '').trim().replace(/\D/g, '')
+    if (p) {
+      const num = p.startsWith('7') ? p : `7${p}`
+      window.open(`https://wa.me/${num}`, '_blank')
+    }
+  }
+
+  const handleOpenComments = (e: React.MouseEvent, row: V2LeadTableRow) => {
+    e.stopPropagation()
+    const id = row.id != null ? String(row.id) : ''
+    if (id) navigate(`/leads/${id}#comments`)
+  }
+
+  const toggleSort = (field: 'date' | 'status') => {
+    setSortBy(field)
+    setSortDir((d) => (sortBy === field ? (d === 'asc' ? 'desc' : 'asc') : 'desc'))
+  }
+  useEffect(() => {
+    setPage(1)
+  }, [search, filterStatus, filterUnassignedOnly, filterMineOnly])
+
   return (
     <div className="page-stack v2-leads-page">
       <div className="page-header v2-leads-header">
@@ -263,7 +344,8 @@ const LeadsTableV2 = () => {
           <h1 className="title">Таблица лидов</h1>
           <p className="subtitle">CRM v2</p>
         </div>
-        <div className="action-card">
+        <div className="action-card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span className="v2-leads-counter">Всего лидов: {totalFiltered}</span>
           <button
             className="ghost-button"
             type="button"
@@ -365,116 +447,205 @@ const LeadsTableV2 = () => {
 
       <div className="card v2-leads-card">
         {status === 'loading' ? (
-          <div className="info-text">Загрузка…</div>
-        ) : (
           <div className="v2-leads-table-wrap">
-            <table className="v2-leads-table">
+            <table className="v2-leads-table v2-leads-skeleton">
               <thead>
                 <tr>
-                  {canAssign && <th><input type="checkbox" checked={selectedIds.size > 0 && selectedIds.size === filtered.length} onChange={toggleSelectAll} aria-label="Выбрать все" /></th>}
-                  {BASE_COLS.map((c) => (
-                    <th key={c}>{c}</th>
-                  ))}
-                  {canAssign && <th>Назначен</th>}
-                  <th>Next call</th>
-                  <th>Создан</th>
-                  <th>Действия</th>
+                  <th>#</th>
+                  <th>Имя</th>
+                  <th>Телефон</th>
+                  <th>Город</th>
+                  <th>Статус</th>
+                  <th>Дата</th>
+                  <th>Комментарий</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={BASE_COLS.length + (canAssign ? 5 : 3)} className="v2-leads-empty">
-                      {rows.length === 0 ? 'Нет данных' : 'Ничего не найдено'}
-                    </td>
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <tr key={i}>
+                    <td><span className="v2-skeleton-line" style={{ width: 32 }} /></td>
+                    <td><span className="v2-skeleton-line" style={{ width: '80%' }} /></td>
+                    <td><span className="v2-skeleton-line" style={{ width: 100 }} /></td>
+                    <td><span className="v2-skeleton-line" style={{ width: 60 }} /></td>
+                    <td><span className="v2-skeleton-line" style={{ width: 70 }} /></td>
+                    <td><span className="v2-skeleton-line" style={{ width: 90 }} /></td>
+                    <td><span className="v2-skeleton-line" style={{ width: '60%' }} /></td>
                   </tr>
-                ) : (
-                  filtered.map((row) => (
-                    <tr
-                      key={row.id}
-                      onClick={() => handleRowClick(row)}
-                      className="v2-leads-row"
-                    >
-                      {canAssign && (
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(row.id)}
-                            onChange={() => toggleSelect(row.id)}
-                          />
-                        </td>
-                      )}
-                      <td>{cellNum(row)}</td>
-                      <td>{cellText(row.name)}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="v2-leads-phone-link"
-                          onClick={(e) => handleCopyPhone(e, row.phone)}
-                        >
-                          {cellText(row.phone)}
-                        </button>
-                      </td>
-                      <td>{cellText(row.city)}</td>
-                      <td>{cellText(row.object)}</td>
-                      <td>{cellText(row.area)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <select
-                          className="v2-leads-status-select"
-                          value={statusForSelect(row.status)}
-                          disabled={statusUpdatingId === row.id}
-                          onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                            handleStatusChange(row, e.target.value as StatusValue)
-                          }
-                        >
-                          {STATUS_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
-                      </td>
-                      {canAssign && (
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <select
-                            className="v2-leads-status-select"
-                            value={row.assigned_to_id != null ? String(row.assigned_to_id) : ''}
-                            disabled={assignUpdatingId === row.id}
-                            onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                              const v = e.target.value
-                              handleAssignChange(row, v ? (Number.isNaN(Number(v)) ? v : Number(v)) : null)
-                            }}
-                          >
-                            <option value="">—</option>
-                            {managers.map((m) => (
-                              <option key={m.id} value={m.id}>{m.email}</option>
-                            ))}
-                          </select>
-                        </td>
-                      )}
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="datetime-local"
-                          className="v2-leads-datetime"
-                          value={formatDateTimeLocal(row.next_call_at)}
-                          disabled={nextCallUpdatingId === row.id}
-                          onChange={(e) => handleNextCallChange(row, e.target.value)}
-                        />
-                      </td>
-                      <td>{cellDate(row)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          className="secondary-button v2-leads-open-btn"
-                          onClick={(e) => handleOpen(e, row)}
-                        >
-                          Открыть
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>
+        ) : (
+          <>
+            <div className="v2-leads-table-wrap">
+              <table className="v2-leads-table">
+                <thead>
+                  <tr>
+                    {canAssign && <th><input type="checkbox" checked={selectedIds.size > 0 && selectedIds.size === filtered.length} onChange={toggleSelectAll} aria-label="Выбрать все" /></th>}
+                    <th>#</th>
+                    <th>Имя</th>
+                    <th>Телефон</th>
+                    <th>Город</th>
+                    <th>Объект</th>
+                    <th>Площадь</th>
+                    <th>
+                      <button type="button" className="v2-sort-th" onClick={() => toggleSort('status')}>
+                        Статус {sortBy === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                      </button>
+                    </th>
+                    {canAssign && <th>Назначен</th>}
+                    <th>Next call</th>
+                    <th>
+                      <button type="button" className="v2-sort-th" onClick={() => toggleSort('date')}>
+                        Дата {sortBy === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                      </button>
+                    </th>
+                    <th>Комментарий</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={BASE_COLS.length + (canAssign ? 6 : 4)} className="v2-leads-empty">
+                        {rows.length === 0 ? 'Лидов нет' : 'Ничего не найдено'}
+                      </td>
+                    </tr>
+                  ) : (
+                    paginated.map((row) => {
+                      const st = statusForSelect(row.status)
+                      return (
+                        <tr
+                          key={row.id}
+                          onClick={() => handleRowClick(row)}
+                          className="v2-leads-row"
+                        >
+                          {canAssign && (
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(row.id)}
+                                onChange={() => toggleSelect(row.id)}
+                              />
+                            </td>
+                          )}
+                          <td>{cellNum(row)}</td>
+                          <td>{cellText(row.name)}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="v2-leads-phone-link"
+                              onClick={(e) => handleCopyPhone(e, row.phone)}
+                            >
+                              {cellText(row.phone)}
+                            </button>
+                          </td>
+                          <td>{cellText(row.city)}</td>
+                          <td>{cellText(row.object)}</td>
+                          <td>{cellText(row.area)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <span className={`v2-status-badge v2-status-badge--${st}`}>
+                              {STATUS_LABELS[st]}
+                            </span>
+                          </td>
+                          {canAssign && (
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <select
+                                className="v2-leads-status-select"
+                                value={row.assigned_to_id != null ? String(row.assigned_to_id) : ''}
+                                disabled={assignUpdatingId === row.id}
+                                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                                  const v = e.target.value
+                                  handleAssignChange(row, v ? (Number.isNaN(Number(v)) ? v : Number(v)) : null)
+                                }}
+                              >
+                                <option value="">—</option>
+                                {managers.map((m) => (
+                                  <option key={m.id} value={m.id}>{m.email}</option>
+                                ))}
+                              </select>
+                            </td>
+                          )}
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="datetime-local"
+                              className="v2-leads-datetime"
+                              value={formatDateTimeLocal(row.next_call_at)}
+                              disabled={nextCallUpdatingId === row.id}
+                              onChange={(e) => handleNextCallChange(row, e.target.value)}
+                            />
+                          </td>
+                          <td>{cellDateShort(row)}</td>
+                          <td title={row.last_comment ?? ''}>{commentPreview(row.last_comment)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="v2-leads-actions-cell">
+                              <button
+                                type="button"
+                                className="v2-leads-action-btn"
+                                title="Позвонить"
+                                onClick={(e) => handleCall(e, row.phone)}
+                              >
+                                📞
+                              </button>
+                              <button
+                                type="button"
+                                className="v2-leads-action-btn v2-leads-action-btn--success"
+                                title="WhatsApp"
+                                onClick={(e) => handleWhatsApp(e, row.phone)}
+                              >
+                                🟦
+                              </button>
+                              <button
+                                type="button"
+                                className="v2-leads-action-btn"
+                                title="Комментарий"
+                                onClick={(e) => handleOpenComments(e, row)}
+                              >
+                                🗒️
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-button v2-leads-open-btn"
+                                onClick={(e) => handleOpen(e, row)}
+                              >
+                                Открыть
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {totalFiltered > 0 && (
+              <div className="v2-leads-pagination">
+                <span className="v2-leads-counter">
+                  Показано {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalFiltered)} из {totalFiltered}
+                </span>
+                <div className="v2-leads-pagination-buttons">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Назад
+                  </button>
+                  <span className="v2-leads-counter">Стр. {page} из {totalPages}</span>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Вперёд
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
