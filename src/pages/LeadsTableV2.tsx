@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useV2RealtimeRefetch } from '../context/V2RealtimeContext'
+import DistributeModal from '../components/DistributeModal'
 import {
   assignLead,
   bulkAssignLeads,
@@ -10,6 +11,7 @@ import {
   getAdminUsers,
   getTenantUsers,
   getV2LeadsTable,
+  postLeadsSelection,
   updateLeadFields,
   type TenantUser,
   type V2LeadTableRow,
@@ -115,6 +117,9 @@ const LeadsTableV2 = () => {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
+  const [selectionLoading, setSelectionLoading] = useState(false)
+  const [distributeOpen, setDistributeOpen] = useState(false)
+  const [selectionByFiltersHint, setSelectionByFiltersHint] = useState<string | null>(null)
 
   useEffect(() => {
     if (!toast) return
@@ -339,10 +344,38 @@ const LeadsTableV2 = () => {
 
   const clearSelection = () => {
     setSelectedIds(new Set())
+    setSelectionByFiltersHint(null)
+  }
+
+  const fetchSelectionByFilters = async () => {
+    if (!canAssign) return
+    setSelectionLoading(true)
+    setSelectionByFiltersHint(null)
+    try {
+      const { lead_ids } = await postLeadsSelection({
+        search: search.trim() || undefined,
+        status: filterStatus || undefined,
+        unassigned_only: filterUnassignedOnly,
+        mine_only: filterMineOnly,
+        assigned_only: filterAssignedOnly,
+      })
+      setSelectedIds(new Set(lead_ids))
+      setSelectionByFiltersHint(lead_ids.length > 0 ? `Выбрано по фильтрам: ${lead_ids.length}` : null)
+      if (lead_ids.length > 0) setToast(`Выбрано: ${lead_ids.length}`)
+    } catch (err) {
+      const e = err as { message?: string; status?: number }
+      if (e?.status === 404 || e?.message === 'Backend required') {
+        setToast('Эндпоинт отбора по фильтрам недоступен')
+      } else {
+        setToast(e?.message ?? 'Ошибка')
+      }
+    } finally {
+      setSelectionLoading(false)
+    }
   }
 
   return (
-    <div className="page-stack v2-leads-page">
+    <div className="page-stack v2-leads-page page-desktop-fullwidth">
       <div className="page-header v2-leads-header">
         <div className="page-header__text">
           <h1 className="title">Таблица лидов</h1>
@@ -412,7 +445,21 @@ const LeadsTableV2 = () => {
             />
             Назначенные
           </label>
+          {canAssign && (
+            <button
+              type="button"
+              className="ghost-button"
+              disabled={selectionLoading}
+              onClick={fetchSelectionByFilters}
+              title="Выбрать лидов по текущим фильтрам (требуется бэкенд)"
+            >
+              {selectionLoading ? '…' : 'Собрать по фильтрам'}
+            </button>
+          )}
         </div>
+        {selectionByFiltersHint && (
+          <div className="v2-leads-bulk-label" style={{ marginBottom: 4 }}>{selectionByFiltersHint}</div>
+        )}
         {canAssign && selectedIds.size > 0 && (
           <div className="v2-leads-bulk">
             <span className="v2-leads-bulk-label">Выбрано: {selectedIds.size}</span>
@@ -446,6 +493,13 @@ const LeadsTableV2 = () => {
               onClick={handleBulkUnassign}
             >
               Снять назначение
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setDistributeOpen(true)}
+            >
+              Распределить
             </button>
             <button
               type="button"
@@ -687,6 +741,19 @@ const LeadsTableV2 = () => {
           </>
         )}
       </div>
+      {distributeOpen && (
+        <DistributeModal
+          leadIds={Array.from(selectedIds)}
+          managers={managers}
+          onClose={() => setDistributeOpen(false)}
+          onSuccess={(assigned) => {
+            setToast(`Распределено: ${assigned}`)
+            setSelectedIds(new Set())
+            setDistributeOpen(false)
+            load()
+          }}
+        />
+      )}
     </div>
   )
 }

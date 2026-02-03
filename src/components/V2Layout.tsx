@@ -2,12 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { V2RealtimeProvider } from '../context/V2RealtimeContext'
+import NotificationsBell from './NotificationsBell'
 
 const V2Layout = () => {
   const { userRole, isAdmin } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [realtimeToast, setRealtimeToast] = useState<string | null>(null)
-  const showFullMenu = isAdmin || userRole === 'owner' || userRole === 'rop'
+  const isRop = userRole === 'rop'
+  const showFullMenu = isAdmin || userRole === 'owner'
+  const showUsersMenu = showFullMenu || isRop
 
   const onNewLeadToast = useCallback((message: string) => {
     setRealtimeToast(message)
@@ -71,14 +74,23 @@ const V2Layout = () => {
           >
             Задачи
           </NavLink>
+          {showUsersMenu && (
+            <NavLink
+              to="/admin/users"
+              className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              Пользователи
+            </NavLink>
+          )}
           {showFullMenu && (
             <>
               <NavLink
-                to="/admin/users"
+                to="/admin/diagnostics"
                 className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
                 onClick={() => setSidebarOpen(false)}
               >
-                Пользователи
+                Диагностика
               </NavLink>
               <NavLink
                 to="/admin/tenants"
@@ -108,9 +120,14 @@ const V2Layout = () => {
         </nav>
       </aside>
       <main className="v2-main">
-        <V2RealtimeProvider onNewLeadToast={onNewLeadToast}>
-          <Outlet />
-        </V2RealtimeProvider>
+        <div className="v2-main-header">
+          <NotificationsBell />
+        </div>
+        <div className="v2-main-content">
+          <V2RealtimeProvider onNewLeadToast={onNewLeadToast}>
+            <Outlet />
+          </V2RealtimeProvider>
+        </div>
       </main>
       {realtimeToast && (
         <div className="v2-toast" role="status" style={{ position: 'fixed' }}>

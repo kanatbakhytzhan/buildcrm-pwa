@@ -125,12 +125,18 @@ const LeadDetails = () => {
       showToast('Готово')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      const status = (err as { status?: number })?.status
       const isNoTenant =
         /Lead has no tenant_id|no tenant_id|cannot set per-chat mute/i.test(msg)
       if (isNoTenant) {
         setAiMuteError(AI_MUTE_NO_TENANT_MESSAGE)
         setLeadHasNoTenantId(true)
+      } else if (status === 409 || status === 400) {
+        setAiMuteError(
+          'Не удалось изменить. Обновите лид или проверьте привязку клиента (tenant) в настройках.',
+        )
       } else {
+        setAiMuteError(msg || 'Не удалось изменить')
         showToast('Не удалось изменить')
       }
     } finally {

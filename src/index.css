@@ -1204,6 +1204,26 @@ a {
   overflow: auto;
 }
 
+.admin-diagnostics-output {
+  margin-top: 16px;
+}
+.admin-diagnostics-output--error .admin-diagnostics-json {
+  color: var(--danger);
+}
+.admin-diagnostics-json {
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--bg);
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}
+
 .outbox-list {
   list-style: none;
   margin: 0;
@@ -2049,6 +2069,21 @@ a {
   #root.v2-route {
     max-width: none;
     margin: 0;
+    width: 100%;
+  }
+}
+
+/* Fullwidth container for v2 pages on desktop — no central strip */
+.page-desktop-fullwidth {
+  width: 100%;
+  max-width: none;
+}
+
+@media (min-width: 1024px) {
+  .page-desktop-fullwidth {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
   }
 }
 
@@ -2140,6 +2175,99 @@ a {
   overflow: auto;
   padding: 20px 16px;
   margin-left: 0;
+  display: flex;
+  flex-direction: column;
+}
+.v2-main-header {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 8px;
+  min-height: 40px;
+}
+.v2-main-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.v2-notifications {
+  position: relative;
+}
+.v2-notifications-trigger {
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: var(--bg);
+  border-radius: var(--radius-btn);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.v2-notifications-trigger:hover {
+  background: #e2e8f0;
+}
+.v2-notifications-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.v2-notifications-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  width: min(320px, calc(100vw - 24px));
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-md);
+  z-index: 20;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
+}
+.v2-notifications-dropdown-header {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.v2-notifications-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+.v2-notifications-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.v2-notifications-item-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+.v2-notifications-item-body {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
 }
 
 @media (min-width: 1024px) {
@@ -2147,8 +2275,17 @@ a {
   .v2-sidebar-backdrop {
     display: none;
   }
+  .v2-layout {
+    display: flex;
+    width: 100%;
+  }
   .v2-sidebar {
-    position: relative;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 240px;
+    flex-shrink: 0;
     transform: none;
     padding-top: 16px;
   }
@@ -2156,15 +2293,26 @@ a {
     padding-top: 0;
   }
   .v2-main {
+    margin-left: 240px;
+    width: calc(100% - 240px);
+    max-width: none;
     padding: 24px 24px;
     min-width: 0;
+    flex: 1;
   }
-  .v2-leads-page {
+  .v2-leads-page,
+  .v2-pipeline-page,
+  .v2-tasks-page {
     max-width: none;
-    min-width: min(100%, 1200px);
+    width: 100%;
   }
   .v2-leads-table-wrap {
     overflow: visible;
+    width: 100%;
+  }
+  .v2-leads-table {
+    width: 100%;
+    table-layout: auto;
   }
   .v2-leads-table thead {
     position: sticky;
@@ -2373,4 +2521,38 @@ a {
 .v2-tasks-btn {
   padding: 8px 14px;
   font-size: 13px;
+}
+
+/* Distribute modal */
+.v2-distribute-modal {
+  max-width: 480px;
+  max-height: 90vh;
+  overflow: auto;
+}
+.v2-distribute-managers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.v2-distribute-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.v2-distribute-row .field-input {
+  flex: 1;
+  min-width: 0;
+}
+.v2-distribute-preview {
+  margin-top: 12px;
+  padding: 10px;
+  background: var(--bg);
+  border-radius: var(--radius-btn);
+  font-size: 13px;
+}
+.v2-distribute-preview-list {
+  max-height: 120px;
+  overflow-y: auto;
+  margin-top: 6px;
 }

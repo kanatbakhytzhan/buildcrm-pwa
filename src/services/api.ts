@@ -444,6 +444,68 @@ export const unassignLead = async (leadId: string): Promise<void> => {
   await assignLead(leadId, { assigned_to_id: null })
 }
 
+/** POST /api/leads/selection — получить lead_ids по текущим фильтрам (для ROP). 404 → stub. */
+export const postLeadsSelection = async (filters: {
+  search?: string
+  status?: string
+  unassigned_only?: boolean
+  mine_only?: boolean
+  assigned_only?: boolean
+}): Promise<{ lead_ids: (string | number)[] }> => {
+  const url = fullUrl('/api/leads/selection')
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(filters),
+  })
+  if (response.status === 404 || response.status === 501) {
+    const err = new Error('Backend required') as ApiError
+    err.status = response.status
+    throw err
+  }
+  if (!response.ok) throw await buildError(response)
+  const data = (await response.json()) as { lead_ids?: (string | number)[] }
+  return { lead_ids: Array.isArray(data.lead_ids) ? data.lead_ids : [] }
+}
+
+/** POST /api/leads/assign/plan — предпросмотр или применение распределения. dry_run=true → только план. 404 → stub. */
+export const postLeadsAssignPlan = async (
+  payload: {
+    lead_ids: (string | number)[]
+    mode: 'round_robin' | 'by_counts' | 'by_ranges'
+    manager_ids?: (string | number)[]
+    counts?: Record<string, number>
+    ranges?: Array<{ manager_id: string | number; from: number; to: number }>
+    sort?: 'date_asc' | 'date_desc' | 'status'
+    set_status_in_progress?: boolean
+  },
+  dryRun: boolean,
+): Promise<{ plan?: Array<{ lead_id: string | number; assigned_to_id: string | number }>; assigned?: number }> => {
+  const url = fullUrl('/api/leads/assign/plan')
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ ...payload, dry_run: dryRun }),
+  })
+  if (response.status === 404 || response.status === 501) {
+    const err = new Error('Backend required') as ApiError
+    err.status = response.status
+    throw err
+  }
+  if (!response.ok) throw await buildError(response)
+  const data = (await response.json()) as {
+    plan?: Array<{ lead_id: string | number; assigned_to_id: string | number }>
+    assigned?: number
+  }
+  return data
+}
+
 /** Массовое снятие назначения. Если бэк даёт bulk-unassign — используем его, иначе по одному. */
 export const bulkUnassignLeads = async (
   leadIds: (string | number)[],
@@ -1271,4 +1333,79 @@ export function subscribeEvents(options: {
       if (pollTimer) clearTimeout(pollTimer)
     }
   }
+}
+
+/* --- Notifications (in-app) --- */
+export type AppNotification = {
+  id: string | number
+  title?: string
+  body?: string
+  read?: boolean
+  created_at?: string
+  type?: string
+}
+
+export const getNotifications = async (
+  unreadOnly = true,
+): Promise<AppNotification[]> => {
+  const url = fullUrl(`/api/notifications?unread=${unreadOnly}`)
+  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  if (response.status === 404 || response.status === 501) {
+    return []
+  }
+  if (!response.ok) throw await buildError(response)
+  const data = await response.json()
+  if (Array.isArray(data)) return data as AppNotification[]
+  if (Array.isArray((data as { items?: unknown[] }).items)) return (data as { items: AppNotification[] }).items
+  if (Array.isArray((data as { notifications?: unknown[] }).notifications)) return (data as { notifications: AppNotification[] }).notifications
+  return []
+}
+
+export const markNotificationsRead = async (): Promise<void> => {
+  const url = fullUrl('/api/notifications/read')
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({}),
+  })
+  if (response.status === 404 || response.status === 501) return
+  if (!response.ok) throw await buildError(response)
+}
+
+/* --- Admin diagnostics --- */
+export const getAdminDiagnosticsDb = async (): Promise<unknown> => {
+  return request<unknown>('/api/admin/diagnostics/db', {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+}
+
+export const postAdminDiagnosticsSmokeTest = async (): Promise<unknown> => {
+  return request<unknown>('/api/admin/diagnostics/smoke-test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({}),
+  })
+}
+
+export const postAdminDiagnosticsCheckAiPrompt = async (
+  tenantId: string | number,
+  message: string,
+): Promise<unknown> => {
+  return request<unknown>('/api/admin/diagnostics/check-ai-prompt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ tenant_id: tenantId, message: message.trim() || '' }),
+  })
+}
+
+export const postAdminDiagnosticsCheckMute = async (
+  tenantId: string | number,
+  chatKey: string,
+): Promise<unknown> => {
+  return request<unknown>('/api/admin/diagnostics/check-mute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ tenant_id: tenantId, chat_key: chatKey.trim() || '' }),
+  })
 }

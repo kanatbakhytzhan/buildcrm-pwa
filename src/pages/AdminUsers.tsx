@@ -190,6 +190,13 @@ const AdminUsers = () => {
           >
             Клиенты
           </button>
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={() => navigate('/admin/diagnostics')}
+          >
+            Диагностика
+          </button>
           {CRM_V2_ENABLED && (
             <button
               className="ghost-button"

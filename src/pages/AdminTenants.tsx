@@ -317,6 +317,13 @@ const AdminTenants = () => {
           <button
             className="ghost-button"
             type="button"
+            onClick={() => navigate('/admin/diagnostics')}
+          >
+            Диагностика
+          </button>
+          <button
+            className="ghost-button"
+            type="button"
             onClick={() => {
               logout()
               navigate('/admin/login')

@@ -182,7 +182,7 @@ const PipelinePage = () => {
   }
 
   return (
-    <div className="page-stack v2-pipeline-page">
+    <div className="page-stack v2-pipeline-page page-desktop-fullwidth">
       <div className="page-header v2-leads-header">
         <h1 className="title">Воронка</h1>
         <div className="action-card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

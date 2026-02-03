@@ -73,7 +73,7 @@ const TasksPage = () => {
   }
 
   return (
-    <div className="page-stack v2-tasks-page">
+    <div className="page-stack v2-tasks-page page-desktop-fullwidth">
       <div className="page-header v2-leads-header">
         <h1 className="title">Задачи</h1>
         <button type="button" className="ghost-button" onClick={load} disabled={loading}>

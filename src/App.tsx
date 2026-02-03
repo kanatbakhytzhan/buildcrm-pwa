@@ -13,6 +13,7 @@ import Profile from './pages/Profile'
 import AdminLogin from './pages/AdminLogin'
 import AdminUsers from './pages/AdminUsers'
 import AdminTenants from './pages/AdminTenants'
+import AdminDiagnostics from './pages/AdminDiagnostics'
 import LeadsTableV2 from './pages/LeadsTableV2'
 import PipelinePage from './pages/PipelinePage'
 import TasksPage from './pages/TasksPage'
@@ -86,6 +87,7 @@ const App = () => {
       <Route element={<RequireAdminAuth />}>
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/tenants" element={<AdminTenants />} />
+        <Route path="/admin/diagnostics" element={<AdminDiagnostics />} />
         {CRM_V2_ENABLED && (
           <Route path="/v2" element={<V2Layout />}>
             <Route path="leads-table" element={<LeadsTableV2 />} />
