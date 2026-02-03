@@ -1558,3 +1558,167 @@ export const assignLeadsByRange = async (body: {
   })
   return (data ?? {}) as { assigned?: number; skipped?: number; plan?: Array<{ lead_id: string | number; name?: string; phone?: string; assigned_to?: string | number }> }
 }
+
+/* --- Tenant settings (universal admin) --- */
+
+export type TenantSettings = {
+  id?: string | number
+  name?: string
+  ai_enabled?: boolean
+  ai_prompt?: string | null
+  ai_after_submit_behavior?: string | null
+  whatsapp_source?: 'chatflow' | 'amomarket' | null
+  chatflow_token?: string | null
+  chatflow_instance_id?: string | null
+  chatflow_phone_number?: string | null
+  chatflow_active?: boolean
+  amocrm_connected?: boolean
+  amocrm_domain?: string | null
+  amocrm_expires_at?: string | null
+}
+
+export const getTenantSettings = async (
+  tenantId: string | number,
+): Promise<TenantSettings> => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/settings`)
+  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  if (response.status === 404) {
+    // fallback: try to get from tenant + whatsapp binding
+    const tenant = await request<unknown>(`/api/admin/tenants/${tenantId}`, {
+      method: 'GET',
+      headers: { ...authHeaders() },
+    }) as AdminTenant | null
+    const binding = await getTenantWhatsappBinding(tenantId).catch(() => ({}))
+    return {
+      id: tenant?.id,
+      name: tenant?.name,
+      ai_enabled: tenant?.ai_enabled !== false,
+      ai_prompt: tenant?.ai_prompt ?? null,
+      ai_after_submit_behavior: 'polite_close',
+      whatsapp_source: (tenant as Record<string, unknown>)?.whatsapp_source as TenantSettings['whatsapp_source'] ?? 'chatflow',
+      chatflow_token: (binding as TenantWhatsappBinding).token ?? null,
+      chatflow_instance_id: (binding as TenantWhatsappBinding).instance_id ?? null,
+      chatflow_phone_number: (binding as TenantWhatsappBinding).phone_number ?? null,
+      chatflow_active: (binding as TenantWhatsappBinding).active !== false,
+      amocrm_connected: false,
+      amocrm_domain: null,
+      amocrm_expires_at: null,
+    }
+  }
+  if (!response.ok) throw await buildError(response)
+  const data = await response.json()
+  return data as TenantSettings
+}
+
+export const updateTenantSettings = async (
+  tenantId: string | number,
+  payload: Partial<TenantSettings>,
+): Promise<void> => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/settings`)
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  })
+  if (response.status === 404) {
+    // fallback: update tenant + whatsapp binding separately
+    await updateAdminTenant(tenantId, {
+      ai_enabled: payload.ai_enabled,
+      ai_prompt: payload.ai_prompt,
+    })
+    if (payload.chatflow_token !== undefined || payload.chatflow_instance_id !== undefined) {
+      await postTenantWhatsappBinding(tenantId, {
+        token: payload.chatflow_token,
+        instance_id: payload.chatflow_instance_id,
+        phone_number: payload.chatflow_phone_number,
+        active: payload.chatflow_active,
+      })
+    }
+    return
+  }
+  if (!response.ok) throw await buildError(response)
+}
+
+/* --- AmoCRM integration --- */
+
+export type AmoStatus = {
+  connected: boolean
+  domain?: string | null
+  expires_at?: string | null
+  pipeline_id?: string | number | null
+}
+
+export const getAmoAuthUrl = async (
+  tenantId: string | number,
+): Promise<{ url: string }> => {
+  const data = await request<unknown>(`/api/admin/tenants/${tenantId}/amocrm/auth-url`, {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  return { url: (data as { url?: string })?.url ?? '' }
+}
+
+export const getAmoStatus = async (
+  tenantId: string | number,
+): Promise<AmoStatus> => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/amocrm/status`)
+  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  if (response.status === 404) {
+    return { connected: false, domain: null, expires_at: null }
+  }
+  if (!response.ok) throw await buildError(response)
+  const data = await response.json()
+  return {
+    connected: (data as Record<string, unknown>).connected === true,
+    domain: (data as Record<string, unknown>).domain as string | null,
+    expires_at: (data as Record<string, unknown>).expires_at as string | null,
+    pipeline_id: (data as Record<string, unknown>).pipeline_id as string | number | null,
+  }
+}
+
+export type AmoPipelineMapping = {
+  stage_key: string
+  stage_id: string | number | null
+}
+
+export const getAmoPipelineMapping = async (
+  tenantId: string | number,
+): Promise<AmoPipelineMapping[]> => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/amocrm/mapping`)
+  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  if (response.status === 404) return []
+  if (!response.ok) throw await buildError(response)
+  const data = await response.json()
+  return Array.isArray(data) ? (data as AmoPipelineMapping[]) : []
+}
+
+export const saveAmoPipelineMapping = async (
+  tenantId: string | number,
+  mapping: AmoPipelineMapping[],
+): Promise<void> => {
+  await request<unknown>(`/api/admin/tenants/${tenantId}/amocrm/mapping`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ mapping }),
+  })
+}
+
+/* --- Mute lead chat --- */
+
+export const muteLeadChat = async (
+  leadId: string | number,
+  muted: boolean,
+): Promise<void> => {
+  await postLeadAiMute(String(leadId), { muted })
+}
+
+/* --- Admin diagnostics: tenant snapshot --- */
+
+export const getAdminTenantSnapshot = async (
+  tenantId: string | number,
+): Promise<unknown> => {
+  return request<unknown>(`/api/admin/diagnostics/tenant/${tenantId}/snapshot`, {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+}

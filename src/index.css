@@ -2623,3 +2623,108 @@ a {
 .v3-sla-item:last-child {
   border-bottom: none;
 }
+
+/* Admin Tenants - clean UI */
+.tenant-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tenant-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.tenant-card-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text);
+}
+.tenant-card-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tenant-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+.tenant-badge--ok {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+.tenant-badge--off {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+.tenant-card-actions {
+  display: flex;
+  gap: 8px;
+}
+.tenant-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.tenant-tab {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tenant-tab:hover {
+  color: var(--text);
+}
+.tenant-tab--active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+.tenant-tab-content {
+  padding: 8px 0;
+}
+.tenant-status {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+.tenant-status--ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+}
+.tenant-status--warn {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+}
+.mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.mapping-table th,
+.mapping-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.mapping-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.mapping-table td .field-input {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 13px;
+}

@@ -14,6 +14,7 @@ import AdminLogin from './pages/AdminLogin'
 import AdminUsers from './pages/AdminUsers'
 import AdminTenants from './pages/AdminTenants'
 import AdminDiagnostics from './pages/AdminDiagnostics'
+import AdminCheck from './pages/AdminCheck'
 import LeadsTableV2 from './pages/LeadsTableV2'
 import PipelinePage from './pages/PipelinePage'
 import TasksPage from './pages/TasksPage'
@@ -91,6 +92,7 @@ const App = () => {
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/tenants" element={<AdminTenants />} />
         <Route path="/admin/diagnostics" element={<AdminDiagnostics />} />
+        <Route path="/admin/check" element={<AdminCheck />} />
         {CRM_V2_ENABLED && (
           <>
             <Route path="/v2" element={<V2Layout />}>

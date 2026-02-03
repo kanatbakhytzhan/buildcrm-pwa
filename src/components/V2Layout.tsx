@@ -9,9 +9,11 @@ const V2Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [realtimeToast, setRealtimeToast] = useState<string | null>(null)
   const isRop = userRole === 'rop'
+  const isManager = userRole === 'manager'
   const showFullMenu = isAdmin || userRole === 'owner'
   const showUsersMenu = showFullMenu || isRop
   const showV3 = showFullMenu || isRop
+  const canAdminTools = showFullMenu
 
   const onNewLeadToast = useCallback((message: string) => {
     setRealtimeToast(message)
@@ -54,27 +56,32 @@ const V2Layout = () => {
       )}
       <aside className={`v2-sidebar ${sidebarOpen ? 'v2-sidebar--open' : ''}`}>
         <nav className="v2-sidebar-nav">
+          {/* Manager sees only Leads + Profile */}
           <NavLink
             to="/v2/leads-table"
             className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
             onClick={() => setSidebarOpen(false)}
           >
-            Таблица
+            Лиды
           </NavLink>
-          <NavLink
-            to="/v2/pipeline"
-            className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            Воронка
-          </NavLink>
-          <NavLink
-            to="/v2/tasks"
-            className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            Задачи
-          </NavLink>
+          {!isManager && (
+            <>
+              <NavLink
+                to="/v2/pipeline"
+                className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                Воронка
+              </NavLink>
+              <NavLink
+                to="/v2/tasks"
+                className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                Задачи
+              </NavLink>
+            </>
+          )}
           {showUsersMenu && (
             <NavLink
               to="/admin/users"
@@ -109,15 +116,8 @@ const V2Layout = () => {
               </NavLink>
             </>
           )}
-          {showFullMenu && (
+          {canAdminTools && (
             <>
-              <NavLink
-                to="/admin/diagnostics"
-                className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
-                onClick={() => setSidebarOpen(false)}
-              >
-                Диагностика
-              </NavLink>
               <NavLink
                 to="/admin/tenants"
                 className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
@@ -126,23 +126,21 @@ const V2Layout = () => {
                 Клиенты
               </NavLink>
               <NavLink
-                to="/profile"
+                to="/admin/check"
                 className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
                 onClick={() => setSidebarOpen(false)}
               >
-                Настройки
+                Проверка
               </NavLink>
             </>
           )}
-          {!showFullMenu && (
-            <NavLink
-              to="/profile"
-              className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
-              onClick={() => setSidebarOpen(false)}
-            >
-              Профиль
-            </NavLink>
-          )}
+          <NavLink
+            to="/profile"
+            className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            Профиль
+          </NavLink>
         </nav>
       </aside>
       <main className="v2-main">
