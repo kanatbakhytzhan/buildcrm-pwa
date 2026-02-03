@@ -14,6 +14,7 @@ import AdminLogin from './pages/AdminLogin'
 import AdminUsers from './pages/AdminUsers'
 import AdminTenants from './pages/AdminTenants'
 import LeadsTableV2 from './pages/LeadsTableV2'
+import V2Layout from './components/V2Layout'
 import { CRM_V2_ENABLED } from './config/appConfig'
 
 const AppLayout = () => {
@@ -84,7 +85,9 @@ const App = () => {
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/tenants" element={<AdminTenants />} />
         {CRM_V2_ENABLED && (
-          <Route path="/v2/leads-table" element={<LeadsTableV2 />} />
+          <Route path="/v2" element={<V2Layout />}>
+            <Route path="leads-table" element={<LeadsTableV2 />} />
+          </Route>
         )}
       </Route>
     </Routes>

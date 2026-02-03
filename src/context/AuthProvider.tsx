@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthContext } from './AuthContext'
-import { login as apiLogin, setUnauthorizedHandler } from '../services/api'
+import type { UserRole } from './AuthContext'
+import { getMe, login as apiLogin, setUnauthorizedHandler } from '../services/api'
 import { clearToken, getToken, setToken } from '../services/auth'
 
 const IS_ADMIN_KEY = 'buildcrm_is_admin'
@@ -13,12 +14,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState<boolean>(
     () => typeof window !== 'undefined' && localStorage.getItem(IS_ADMIN_KEY) === '1',
   )
+  const [userRole, setUserRole] = useState<UserRole | null>(null)
+  const [tenantId, setTenantId] = useState<string | number | null>(null)
+  const [userId, setUserId] = useState<string | number | null>(null)
   const [authMessage, setAuthMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!tokenState) {
+      setUserRole(null)
+      setTenantId(null)
+      setUserId(null)
+      return
+    }
+    getMe()
+      .then((me) => {
+        if (me?.role) setUserRole(me.role as UserRole)
+        if (me?.tenant_id != null) setTenantId(me.tenant_id)
+        if (me?.id != null) setUserId(me.id)
+      })
+      .catch(() => {
+        setUserRole(null)
+        setTenantId(null)
+        setUserId(null)
+      })
+  }, [tokenState])
 
   const logout = useCallback((message?: string) => {
     clearToken()
     setTokenState(null)
     setIsAdmin(false)
+    setUserRole(null)
+    setTenantId(null)
+    setUserId(null)
     try {
       localStorage.removeItem(IS_ADMIN_KEY)
     } catch {
@@ -60,12 +87,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       token: tokenState,
       isAuthenticated: Boolean(tokenState),
       isAdmin,
+      userRole,
+      tenantId,
+      userId,
       authMessage,
       login,
       logout,
       clearMessage: () => setAuthMessage(null),
     }),
-    [tokenState, isAdmin, authMessage, login, logout],
+    [tokenState, isAdmin, userRole, tenantId, userId, authMessage, login, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

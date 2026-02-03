@@ -253,6 +253,19 @@ export type V2LeadTableRow = {
   status?: string | null
   date?: string | null
   created_at?: string | null
+  assigned_to_id?: string | number | null
+  assigned_to_name?: string | null
+  next_call_at?: string | null
+  tenant_id?: string | number | null
+}
+
+/** Current user (GET /api/me or /api/auth/me). For role-based UI. */
+export type MeUser = {
+  id?: string | number
+  email?: string
+  role?: 'admin' | 'owner' | 'rop' | 'manager'
+  tenant_id?: string | number | null
+  is_admin?: boolean
 }
 
 export type V2LeadsTableResult = { list: V2LeadTableRow[]; total: number }
@@ -311,6 +324,118 @@ export const updateLeadStatus = async (id: string, status: LeadStatus) => {
     body: JSON.stringify({ status }),
   })
   return data ?? { id, status }
+}
+
+/** PATCH /api/leads/{id} — status, next_call_at, etc. */
+export const updateLeadFields = async (
+  id: string,
+  payload: { status?: LeadStatus; next_call_at?: string | null; [key: string]: unknown },
+) => {
+  const data = await request<unknown>(`/api/leads/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+  return data
+}
+
+/** GET /api/me or /api/auth/me — current user and role. 404 → null. */
+export const getMe = async (): Promise<MeUser | null> => {
+  const paths = ['/api/me', '/api/auth/me']
+  for (const path of paths) {
+    const url = fullUrl(path)
+    const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+    if (response.status === 404) continue
+    if (!response.ok) throw await buildError(response)
+    const text = await response.text()
+    if (!text) return null
+    try {
+      const data = JSON.parse(text) as Record<string, unknown>
+      const role = (data.role as string) ?? (data.is_admin ? 'admin' : undefined)
+      const id = data.id != null ? data.id as string | number : undefined
+      const tenant_id = data.tenant_id != null && data.tenant_id !== '' ? (data.tenant_id as string | number) : null
+      return {
+        id,
+        email: data.email as string,
+        role: role as MeUser['role'],
+        tenant_id,
+        is_admin: data.is_admin === true,
+      }
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+const ASSIGN_UNAVAILABLE = 'Функция обновляется'
+
+/** PATCH /api/leads/{id}/assign — assign lead to user. 404/403 → throw with friendly message. */
+export const assignLead = async (
+  leadId: string,
+  payload: { assigned_to_id: string | number | null },
+) => {
+  const url = fullUrl(`/api/leads/${leadId}/assign`)
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+  if (response.status === 401 || response.status === 403) {
+    const err = new Error('Недостаточно прав') as ApiError
+    err.status = response.status
+    throw err
+  }
+  if (response.status === 404) {
+    const err = new Error(ASSIGN_UNAVAILABLE) as ApiError
+    err.status = 404
+    throw err
+  }
+  if (!response.ok) throw await buildError(response)
+  const text = await response.text()
+  return text ? JSON.parse(text) : undefined
+}
+
+/** POST /api/leads/bulk-assign — bulk assign. Returns { assigned: N, skipped: M }. */
+export const bulkAssignLeads = async (
+  payload: {
+    lead_ids: (string | number)[]
+    assigned_to_id: string | number
+    set_status_in_progress?: boolean
+  },
+): Promise<{ assigned: number; skipped: number }> => {
+  const url = fullUrl('/api/leads/bulk-assign')
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+  if (response.status === 401 || response.status === 403) {
+    const err = new Error('Недостаточно прав') as ApiError
+    err.status = response.status
+    throw err
+  }
+  if (response.status === 404) {
+    const err = new Error(ASSIGN_UNAVAILABLE) as ApiError
+    err.status = 404
+    throw err
+  }
+  if (!response.ok) throw await buildError(response)
+  const text = await response.text()
+  const data = text ? (JSON.parse(text) as Record<string, unknown>) : {}
+  return {
+    assigned: Number(data.assigned ?? 0),
+    skipped: Number(data.skipped ?? 0),
+  }
 }
 
 export const deleteLead = async (id: string) => {
