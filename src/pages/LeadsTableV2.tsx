@@ -40,9 +40,8 @@ const LeadsTableV2 = () => {
     setStatus('loading')
     setError(null)
     try {
-      const data = await getV2LeadsTable()
-      const list = Array.isArray(data) ? data : []
-      setRows(list)
+      const { list } = await getV2LeadsTable()
+      setRows(Array.isArray(list) ? list : [])
       setStatus('idle')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Не удалось загрузить таблицу'

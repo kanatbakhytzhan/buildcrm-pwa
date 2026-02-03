@@ -255,23 +255,36 @@ export type V2LeadTableRow = {
   created_at?: string | null
 }
 
-const extractV2LeadsTable = (data: unknown): V2LeadTableRow[] => {
-  const json = data
-  const list = Array.isArray(json)
-    ? json
-    : (json && typeof json === 'object')
-      ? (json as Record<string, unknown>).leads ??
-        (json as Record<string, unknown>).items ??
-        (json as Record<string, unknown>).data ??
-        []
-      : []
+export type V2LeadsTableResult = { list: V2LeadTableRow[]; total: number }
+
+function extractV2LeadsTable(data: unknown): V2LeadsTableResult {
+  const json = data as Record<string, unknown> | unknown[] | null | undefined
+  let list: unknown[] = []
+  if (json != null && typeof json === 'object') {
+    if (Array.isArray(json)) {
+      list = json
+    } else {
+      const obj = json as Record<string, unknown>
+      if (Array.isArray(obj.rows)) list = obj.rows as unknown[]
+      else if (Array.isArray(obj.leads)) list = obj.leads as unknown[]
+      else if (Array.isArray(obj.items)) list = obj.items as unknown[]
+      else if (Array.isArray(obj.data)) list = obj.data as unknown[]
+      else if (obj.ok && Array.isArray(obj.result)) list = obj.result as unknown[]
+      else list = []
+    }
+  }
   const arr = Array.isArray(list) ? list : []
-  console.log('leads response', json)
-  console.log('leads list length', arr.length)
-  return arr as V2LeadTableRow[]
+  const total = (json != null && typeof json === 'object' && !Array.isArray(json))
+    ? (typeof (json as Record<string, unknown>).total === 'number'
+        ? (json as Record<string, unknown>).total as number
+        : arr.length)
+    : arr.length
+  console.log('leads raw json', json)
+  console.log('normalized list length', arr.length)
+  return { list: arr as V2LeadTableRow[], total }
 }
 
-export const getV2LeadsTable = async (): Promise<V2LeadTableRow[]> => {
+export const getV2LeadsTable = async (): Promise<V2LeadsTableResult> => {
   const data = await request<unknown>('/api/v2/leads/table', {
     method: 'GET',
     headers: { ...authHeaders() },
