@@ -1409,3 +1409,152 @@ export const postAdminDiagnosticsCheckMute = async (
     body: JSON.stringify({ tenant_id: tenantId, chat_key: chatKey.trim() || '' }),
   })
 }
+
+/* --- V3: Import, Reports, Auto-assign --- */
+
+export type ImportLeadsResult = {
+  created?: number
+  skipped?: number
+  errors?: number
+  preview?: Record<string, unknown>[]
+  errors_list?: string[]
+}
+
+export const importLeads = async (
+  file: File,
+  options: { tenant_id?: string | number; dry_run: boolean; mapping?: Record<string, string> },
+): Promise<ImportLeadsResult> => {
+  const form = new FormData()
+  form.append('file', file)
+  if (options.tenant_id != null) form.append('tenant_id', String(options.tenant_id))
+  form.append('dry_run', String(options.dry_run))
+  if (options.mapping) form.append('mapping', JSON.stringify(options.mapping))
+  const url = fullUrl('/api/admin/import/leads')
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...authHeaders() },
+    body: form,
+  })
+  if (response.status === 401 || response.status === 403) {
+    const err = new Error('Нет доступа') as ApiError
+    err.status = response.status
+    throw err
+  }
+  if (response.status === 422) {
+    const text = await response.text()
+    let detail = text
+    try {
+      const j = JSON.parse(text) as { detail?: string | unknown }
+      detail = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail ?? j)
+    } catch {
+      // keep text
+    }
+    throw new Error(detail) as ApiError
+  }
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(text || 'Ошибка сервера') as ApiError
+  }
+  const data = await response.json()
+  return data as ImportLeadsResult
+}
+
+async function reportRequest(path: string, params: { date_from?: string; date_to?: string }): Promise<unknown> {
+  const q = new URLSearchParams()
+  if (params.date_from) q.set('date_from', params.date_from)
+  if (params.date_to) q.set('date_to', params.date_to)
+  const url = fullUrl(`${path}?${q}`)
+  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  if (response.status === 404 || response.status === 501) return null
+  if (!response.ok) throw await buildError(response)
+  return response.json()
+}
+
+export const getReportsSummary = async (params: {
+  date_from?: string
+  date_to?: string
+}): Promise<unknown> => reportRequest('/api/admin/reports/summary', params)
+
+export const getReportsSla = async (params: {
+  date_from?: string
+  date_to?: string
+}): Promise<unknown> => reportRequest('/api/admin/reports/sla', params)
+
+export const getReportsWorkload = async (params: {
+  date_from?: string
+  date_to?: string
+}): Promise<unknown> => reportRequest('/api/admin/reports/workload', params)
+
+export type AutoAssignRule = {
+  id: string | number
+  name?: string
+  is_active?: boolean
+  priority?: number
+  match_city?: string
+  match_language?: string
+  match_object_type?: string
+  match_contains?: string
+  time_from?: string
+  time_to?: string
+  days_of_week?: number[]
+  strategy?: 'fixed' | 'round_robin' | 'least_loaded'
+  fixed_user_id?: string | number
+}
+
+export const getAutoAssignRules = async (tenantId: string | number): Promise<AutoAssignRule[]> => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/auto-assign-rules`)
+  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  if (response.status === 404 || response.status === 501) return []
+  if (!response.ok) throw await buildError(response)
+  const data = await response.json()
+  return Array.isArray(data) ? (data as AutoAssignRule[]) : []
+}
+
+export const createAutoAssignRule = async (
+  tenantId: string | number,
+  body: Partial<AutoAssignRule>,
+): Promise<unknown> => {
+  return request<unknown>(`/api/admin/tenants/${tenantId}/auto-assign-rules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+  })
+}
+
+export const updateAutoAssignRule = async (
+  ruleId: string | number,
+  body: Partial<AutoAssignRule>,
+): Promise<unknown> => {
+  return request<unknown>(`/api/admin/auto-assign-rules/${ruleId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+  })
+}
+
+export const deleteAutoAssignRule = async (ruleId: string | number): Promise<void> => {
+  return request<void>(`/api/admin/auto-assign-rules/${ruleId}`, {
+    method: 'DELETE',
+    headers: { ...authHeaders() },
+  })
+}
+
+export const assignLeadsByRange = async (body: {
+  tenant_id?: string | number
+  status?: string
+  unassigned_only?: boolean
+  from_index: number
+  to_index: number
+  strategy: 'round_robin' | 'fixed' | 'custom_map'
+  manager_ids?: (string | number)[]
+  fixed_user_id?: string | number
+  custom_map?: Array<{ manager_id: string | number; count: number }>
+  dry_run?: boolean
+}): Promise<{ assigned?: number; skipped?: number; plan?: Array<{ lead_id: string | number; name?: string; phone?: string; assigned_to?: string | number }> }> => {
+  const data = await request<unknown>('/api/admin/leads/assign-by-range', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+  })
+  return (data ?? {}) as { assigned?: number; skipped?: number; plan?: Array<{ lead_id: string | number; name?: string; phone?: string; assigned_to?: string | number }> }
+}

@@ -17,6 +17,9 @@ import AdminDiagnostics from './pages/AdminDiagnostics'
 import LeadsTableV2 from './pages/LeadsTableV2'
 import PipelinePage from './pages/PipelinePage'
 import TasksPage from './pages/TasksPage'
+import ReportsPage from './pages/v3/ReportsPage'
+import ImportPage from './pages/v3/ImportPage'
+import AutoAssignPage from './pages/v3/AutoAssignPage'
 import V2Layout from './components/V2Layout'
 import { CRM_V2_ENABLED } from './config/appConfig'
 
@@ -89,11 +92,18 @@ const App = () => {
         <Route path="/admin/tenants" element={<AdminTenants />} />
         <Route path="/admin/diagnostics" element={<AdminDiagnostics />} />
         {CRM_V2_ENABLED && (
-          <Route path="/v2" element={<V2Layout />}>
-            <Route path="leads-table" element={<LeadsTableV2 />} />
-            <Route path="pipeline" element={<PipelinePage />} />
-            <Route path="tasks" element={<TasksPage />} />
-          </Route>
+          <>
+            <Route path="/v2" element={<V2Layout />}>
+              <Route path="leads-table" element={<LeadsTableV2 />} />
+              <Route path="pipeline" element={<PipelinePage />} />
+              <Route path="tasks" element={<TasksPage />} />
+            </Route>
+            <Route path="/v3" element={<V2Layout />}>
+              <Route path="reports" element={<ReportsPage />} />
+              <Route path="import" element={<ImportPage />} />
+              <Route path="auto-assign" element={<AutoAssignPage />} />
+            </Route>
+          </>
         )}
       </Route>
     </Routes>

@@ -11,6 +11,7 @@ const V2Layout = () => {
   const isRop = userRole === 'rop'
   const showFullMenu = isAdmin || userRole === 'owner'
   const showUsersMenu = showFullMenu || isRop
+  const showV3 = showFullMenu || isRop
 
   const onNewLeadToast = useCallback((message: string) => {
     setRealtimeToast(message)
@@ -82,6 +83,31 @@ const V2Layout = () => {
             >
               Пользователи
             </NavLink>
+          )}
+          {showV3 && (
+            <>
+              <NavLink
+                to="/v3/reports"
+                className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                Отчёты
+              </NavLink>
+              <NavLink
+                to="/v3/import"
+                className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                Импорт
+              </NavLink>
+              <NavLink
+                to="/v3/auto-assign"
+                className={({ isActive }) => `v2-sidebar-link ${isActive ? 'v2-sidebar-link--active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+              >
+                Автоназначение
+              </NavLink>
+            </>
           )}
           {showFullMenu && (
             <>
