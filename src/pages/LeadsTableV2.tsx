@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import {
   assignLead,
   bulkAssignLeads,
+  bulkUnassignLeads,
+  getAdminUsers,
   getTenantUsers,
   getV2LeadsTable,
   updateLeadFields,
@@ -121,6 +123,7 @@ const LeadsTableV2 = () => {
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterUnassignedOnly, setFilterUnassignedOnly] = useState(false)
   const [filterMineOnly, setFilterMineOnly] = useState(false)
+  const [filterAssignedOnly, setFilterAssignedOnly] = useState(false)
   const [assignUpdatingId, setAssignUpdatingId] = useState<string | number | null>(null)
   const [nextCallUpdatingId, setNextCallUpdatingId] = useState<string | number | null>(null)
   const [sortBy, setSortBy] = useState<'date' | 'status'>('date')
@@ -153,11 +156,25 @@ const LeadsTableV2 = () => {
   }, [load])
 
   useEffect(() => {
-    if (!canAssign || tenantId == null) return
-    getTenantUsers(tenantId)
-      .then(setManagers)
-      .catch(() => setManagers([]))
-  }, [canAssign, tenantId])
+    if (!canAssign) return
+    if (tenantId != null) {
+      getTenantUsers(tenantId)
+        .then(setManagers)
+        .catch(() => {
+          if (isAdmin) {
+            getAdminUsers()
+              .then((users) => setManagers(users.map((u) => ({ id: u.id, email: u.email, role: undefined }))))
+              .catch(() => setManagers([]))
+          } else setManagers([])
+        })
+    } else if (isAdmin) {
+      getAdminUsers()
+        .then((users) => setManagers(users.map((u) => ({ id: u.id, email: u.email, role: undefined }))))
+        .catch(() => setManagers([]))
+    } else {
+      setManagers([])
+    }
+  }, [canAssign, tenantId, isAdmin])
 
   const filtered = useMemo(() => {
     let list = rows
@@ -179,6 +196,9 @@ const LeadsTableV2 = () => {
     if (filterMineOnly && userId != null) {
       list = list.filter((r) => r.assigned_to_id != null && String(r.assigned_to_id) === String(userId))
     }
+    if (filterAssignedOnly) {
+      list = list.filter((r) => r.assigned_to_id != null && r.assigned_to_id !== '')
+    }
     const statusOrder: Record<string, number> = { new: 0, in_progress: 1, done: 2, cancelled: 3 }
     const sorted = [...list].sort((a, b) => {
       if (sortBy === 'date') {
@@ -191,7 +211,7 @@ const LeadsTableV2 = () => {
       return sortDir === 'asc' ? sa - sb : sb - sa
     })
     return sorted
-  }, [rows, search, filterStatus, filterUnassignedOnly, filterMineOnly, userId, sortBy, sortDir])
+  }, [rows, search, filterStatus, filterUnassignedOnly, filterMineOnly, filterAssignedOnly, userId, sortBy, sortDir])
 
   const totalFiltered = filtered.length
   const paginated = useMemo(() => {
@@ -269,7 +289,7 @@ const LeadsTableV2 = () => {
         assigned_to_id: bulkManagerId,
         set_status_in_progress: bulkSetStatus,
       })
-      setToast(`Назначено: ${result.assigned}, пропущено: ${result.skipped}`)
+      setToast(result.skipped > 0 ? `Назначено: ${result.assigned}, пропущено: ${result.skipped}` : 'Назначено')
       setSelectedIds(new Set())
       load()
     } catch (err) {
@@ -335,7 +355,27 @@ const LeadsTableV2 = () => {
   }
   useEffect(() => {
     setPage(1)
-  }, [search, filterStatus, filterUnassignedOnly, filterMineOnly])
+  }, [search, filterStatus, filterUnassignedOnly, filterMineOnly, filterAssignedOnly])
+
+  const handleBulkUnassign = async () => {
+    if (selectedIds.size === 0) return
+    setBulkLoading(true)
+    try {
+      const result = await bulkUnassignLeads(Array.from(selectedIds))
+      setToast(`Снято назначение: ${result.unassigned}`)
+      setSelectedIds(new Set())
+      load()
+    } catch (err) {
+      const e = err as { status?: number; message?: string }
+      setToast(e?.status === 401 || e?.status === 403 ? 'Недостаточно прав' : (e?.message ?? 'Ошибка'))
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  const clearSelection = () => {
+    setSelectedIds(new Set())
+  }
 
   return (
     <div className="page-stack v2-leads-page">
@@ -400,26 +440,32 @@ const LeadsTableV2 = () => {
             />
             Только мои
           </label>
+          <label className="v2-leads-checkbox">
+            <input
+              type="checkbox"
+              checked={filterAssignedOnly}
+              onChange={(e) => setFilterAssignedOnly(e.target.checked)}
+            />
+            Назначенные
+          </label>
         </div>
         {canAssign && selectedIds.size > 0 && (
           <div className="v2-leads-bulk">
-            <select
-              className="field-input"
-              value={bulkManagerId}
-              onChange={(e) => setBulkManagerId(e.target.value)}
-            >
-              <option value="">Выберите менеджера</option>
-              {managers.map((m) => (
-                <option key={m.id} value={m.id}>{m.email}</option>
-              ))}
-            </select>
-            <label className="v2-leads-checkbox">
-              <input
-                type="checkbox"
-                checked={bulkSetStatus}
-                onChange={(e) => setBulkSetStatus(e.target.checked)}
-              />
-              и статус in_progress
+            <span className="v2-leads-bulk-label">Выбрано: {selectedIds.size}</span>
+            <label className="field" style={{ marginBottom: 0 }}>
+              <span className="field-label" style={{ marginBottom: 4 }}>Назначить менеджеру</span>
+              <select
+                className="field-input"
+                value={bulkManagerId}
+                onChange={(e) => setBulkManagerId(e.target.value)}
+              >
+                <option value="">— Выберите —</option>
+                {managers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.email} {m.role ? `(${m.role})` : ''}
+                  </option>
+                ))}
+              </select>
             </label>
             <button
               type="button"
@@ -427,8 +473,31 @@ const LeadsTableV2 = () => {
               disabled={!bulkManagerId || bulkLoading}
               onClick={handleBulkAssign}
             >
-              {bulkLoading ? '…' : `Назначить выбранные (${selectedIds.size})`}
+              {bulkLoading ? '…' : 'Назначить'}
             </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={bulkLoading}
+              onClick={handleBulkUnassign}
+            >
+              Снять назначение
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={clearSelection}
+            >
+              Очистить выделение
+            </button>
+            <label className="v2-leads-checkbox">
+              <input
+                type="checkbox"
+                checked={bulkSetStatus}
+                onChange={(e) => setBulkSetStatus(e.target.checked)}
+              />
+              и статус «В работе»
+            </label>
           </div>
         )}
       </div>
@@ -493,7 +562,7 @@ const LeadsTableV2 = () => {
                         Статус {sortBy === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                       </button>
                     </th>
-                    {canAssign && <th>Назначен</th>}
+                    {canAssign && <th>Менеджер</th>}
                     <th>Next call</th>
                     <th>
                       <button type="button" className="v2-sort-th" onClick={() => toggleSort('date')}>
@@ -550,18 +619,24 @@ const LeadsTableV2 = () => {
                           </td>
                           {canAssign && (
                             <td onClick={(e) => e.stopPropagation()}>
+                              <span className="v2-leads-manager-name">
+                                {(row.assigned_to_id != null && row.assigned_to_id !== '')
+                                  ? (row.assigned_to_name ?? String(row.assigned_to_id))
+                                  : '—'}
+                              </span>
                               <select
-                                className="v2-leads-status-select"
+                                className="v2-leads-status-select v2-leads-manager-select"
                                 value={row.assigned_to_id != null ? String(row.assigned_to_id) : ''}
                                 disabled={assignUpdatingId === row.id}
                                 onChange={(e: ChangeEvent<HTMLSelectElement>) => {
                                   const v = e.target.value
                                   handleAssignChange(row, v ? (Number.isNaN(Number(v)) ? v : Number(v)) : null)
                                 }}
+                                aria-label="Изменить менеджера"
                               >
                                 <option value="">—</option>
                                 {managers.map((m) => (
-                                  <option key={m.id} value={m.id}>{m.email}</option>
+                                  <option key={m.id} value={m.id}>{m.email} {m.role ? `(${m.role})` : ''}</option>
                                 ))}
                               </select>
                             </td>

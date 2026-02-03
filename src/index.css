@@ -1899,12 +1899,27 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  align-items: center;
+  align-items: flex-end;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
+.v2-leads-bulk-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  margin-right: 4px;
+}
 .v2-leads-bulk .field-input {
   min-width: 180px;
+}
+.v2-leads-manager-name {
+  display: block;
+  font-size: 13px;
+  color: var(--text);
+}
+.v2-leads-manager-select {
+  margin-top: 4px;
+  min-width: 140px;
 }
 .v2-leads-phone-link {
   background: none;

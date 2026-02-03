@@ -439,6 +439,43 @@ export const bulkAssignLeads = async (
   }
 }
 
+/** Снять назначение с одного лида (PATCH assign с null). */
+export const unassignLead = async (leadId: string): Promise<void> => {
+  await assignLead(leadId, { assigned_to_id: null })
+}
+
+/** Массовое снятие назначения. Если бэк даёт bulk-unassign — используем его, иначе по одному. */
+export const bulkUnassignLeads = async (
+  leadIds: (string | number)[],
+): Promise<{ unassigned: number }> => {
+  const url = fullUrl('/api/leads/bulk-unassign')
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ lead_ids: leadIds }),
+  })
+  if (response.status === 404 || response.status === 501) {
+    const results = await Promise.all(
+      leadIds.map((id) =>
+        assignLead(String(id), { assigned_to_id: null }).then(() => true).catch(() => false),
+      ),
+    )
+    return { unassigned: results.filter(Boolean).length }
+  }
+  if (response.status === 401 || response.status === 403) {
+    const err = new Error('Недостаточно прав') as ApiError
+    err.status = response.status
+    throw err
+  }
+  if (!response.ok) throw await buildError(response)
+  const text = await response.text()
+  const data = text ? (JSON.parse(text) as Record<string, unknown>) : {}
+  return { unassigned: Number(data.unassigned ?? data.count ?? leadIds.length) }
+}
+
 export const deleteLead = async (id: string) => {
   return request<void>(`/api/leads/${id}`, {
     method: 'DELETE',
