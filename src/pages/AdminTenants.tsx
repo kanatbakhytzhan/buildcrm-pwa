@@ -11,7 +11,6 @@ import {
   postTenantWhatsappBinding,
   saveAmoPipelineMapping,
   selfCheckTenant,
-  updateAdminTenant,
   updateTenantSettings,
   type AdminTenant,
   type AmoPipelineMapping,
@@ -22,6 +21,7 @@ import {
 } from '../services/api'
 
 type ModalTab = 'ai' | 'whatsapp' | 'amocrm'
+type SettingsStatus = 'idle' | 'loading' | 'error' | 'ready'
 
 const STAGE_KEY_LABELS: Record<string, string> = {
   new: 'Новый лид',
@@ -32,19 +32,47 @@ const STAGE_KEY_LABELS: Record<string, string> = {
 
 /** Safely extract error message string, never return [object Object] */
 const getErrorMessage = (err: unknown): string => {
+  if (!err) return 'Неизвестная ошибка'
   if (typeof err === 'string') return err
   if (err instanceof Error) return err.message
-  const e = err as Record<string, unknown> | null
-  if (e?.detail && typeof e.detail === 'string') return e.detail
-  if (e?.message && typeof e.message === 'string') return e.message
-  if (e?.detail && typeof e.detail === 'object') {
+  const e = err as Record<string, unknown>
+  if (typeof e.detail === 'string') return e.detail
+  if (typeof e.message === 'string') return e.message
+  if (e.detail && typeof e.detail === 'object') {
     try {
       return JSON.stringify(e.detail)
     } catch {
       return 'Ошибка запроса'
     }
   }
-  return 'Ошибка запроса'
+  try {
+    const s = JSON.stringify(err)
+    return s.length > 200 ? s.slice(0, 200) + '...' : s
+  } catch {
+    return 'Ошибка запроса'
+  }
+}
+
+/** Create safe default settings to avoid undefined crashes */
+function safeSettings(raw: TenantSettings | null): TenantSettings {
+  return {
+    id: raw?.id ?? undefined,
+    name: raw?.name ?? '',
+    ai_enabled: raw?.ai_enabled !== false,
+    ai_prompt: raw?.ai_prompt ?? '',
+    ai_after_submit_behavior: raw?.ai_after_submit_behavior ?? 'polite_close',
+    whatsapp_source: raw?.whatsapp_source ?? 'chatflow',
+    chatflow_token: raw?.chatflow_token ?? '',
+    chatflow_token_masked: raw?.chatflow_token_masked ?? null,
+    chatflow_instance_id: raw?.chatflow_instance_id ?? '',
+    chatflow_phone_number: raw?.chatflow_phone_number ?? '',
+    chatflow_active: raw?.chatflow_active !== false,
+    chatflow_binding_exists: raw?.chatflow_binding_exists ?? false,
+    amocrm_connected: raw?.amocrm_connected ?? false,
+    amocrm_domain: raw?.amocrm_domain ?? null,
+    amocrm_base_domain: raw?.amocrm_base_domain ?? '',
+    amocrm_expires_at: raw?.amocrm_expires_at ?? null,
+  }
 }
 
 const AdminTenants = () => {
@@ -53,17 +81,18 @@ const AdminTenants = () => {
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
-  // Settings modal
+  // Settings modal - state machine
   const [editOpen, setEditOpen] = useState(false)
   const [activeTenant, setActiveTenant] = useState<AdminTenant | null>(null)
   const [activeTab, setActiveTab] = useState<ModalTab>('ai')
-  const [settings, setSettings] = useState<TenantSettings | null>(null)
-  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [settingsStatus, setSettingsStatus] = useState<SettingsStatus>('idle')
+  const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [settings, setSettings] = useState<TenantSettings>(safeSettings(null))
   const [actionStatus, setActionStatus] = useState<'idle' | 'loading'>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
 
   // AmoCRM
-  const [amoStatus, setAmoStatus] = useState<AmoStatus | null>(null)
+  const [amoStatus, setAmoStatus] = useState<AmoStatus>({ connected: false })
   const [amoMapping, setAmoMapping] = useState<AmoPipelineMapping[]>([])
   const [amoLoading, setAmoLoading] = useState(false)
   const [amoBaseDomain, setAmoBaseDomain] = useState('')
@@ -90,7 +119,7 @@ const AdminTenants = () => {
     setError(null)
     try {
       const data = await getAdminTenants()
-      setTenants(data)
+      setTenants(Array.isArray(data) ? data : [])
       setStatus('idle')
     } catch (err) {
       setError(getErrorMessage(err))
@@ -104,28 +133,41 @@ const AdminTenants = () => {
 
   // --- Settings Modal ---
   const loadSettings = useCallback(async (tenantId: string | number) => {
-    setSettingsLoading(true)
+    setSettingsStatus('loading')
+    setSettingsError(null)
     setActionError(null)
     try {
-      const [s, st, mp] = await Promise.all([
-        getTenantSettings(tenantId),
+      const [rawSettings, rawAmoStatus, rawMapping] = await Promise.all([
+        getTenantSettings(tenantId).catch((e) => {
+          console.error('getTenantSettings failed:', e)
+          return null
+        }),
         getAmoStatus(tenantId).catch(() => ({ connected: false })),
         getAmoPipelineMapping(tenantId).catch(() => []),
       ])
-      setSettings(s)
-      setAmoStatus(st)
-      setAmoBaseDomain(s.amocrm_base_domain || (st as AmoStatus).domain || '')
-      setAmoMapping(mp.length > 0 ? mp : [
-        { stage_key: 'new', stage_id: null },
-        { stage_key: 'in_progress', stage_id: null },
-        { stage_key: 'done', stage_id: null },
-        { stage_key: 'cancelled', stage_id: null },
-      ])
+
+      if (!rawSettings) {
+        throw new Error('Не удалось загрузить настройки tenant')
+      }
+
+      const safe = safeSettings(rawSettings)
+      setSettings(safe)
+      setAmoStatus(rawAmoStatus as AmoStatus)
+      setAmoBaseDomain(safe.amocrm_base_domain || (rawAmoStatus as AmoStatus).domain || '')
+      setAmoMapping(
+        Array.isArray(rawMapping) && rawMapping.length > 0
+          ? rawMapping
+          : [
+              { stage_key: 'new', stage_id: null },
+              { stage_key: 'in_progress', stage_id: null },
+              { stage_key: 'done', stage_id: null },
+              { stage_key: 'cancelled', stage_id: null },
+            ]
+      )
+      setSettingsStatus('ready')
     } catch (err) {
-      setSettings(null)
-      setActionError(getErrorMessage(err))
-    } finally {
-      setSettingsLoading(false)
+      setSettingsError(getErrorMessage(err))
+      setSettingsStatus('error')
     }
   }, [])
 
@@ -133,22 +175,33 @@ const AdminTenants = () => {
     setActiveTenant(tenant)
     setActiveTab(tab)
     setEditOpen(true)
+    setSettingsStatus('idle')
+    setSettingsError(null)
     setActionError(null)
     setAmoBaseDomain('')
+    setSettings(safeSettings(null))
     loadSettings(tenant.id)
   }
 
   const closeEdit = () => {
     setEditOpen(false)
     setActiveTenant(null)
-    setSettings(null)
-    setAmoStatus(null)
+    setSettings(safeSettings(null))
+    setAmoStatus({ connected: false })
     setAmoMapping([])
+    setSettingsStatus('idle')
+    setSettingsError(null)
     setActionError(null)
   }
 
+  const handleRetrySettings = () => {
+    if (activeTenant) {
+      loadSettings(activeTenant.id)
+    }
+  }
+
   const handleSaveAi = async () => {
-    if (!activeTenant || !settings) return
+    if (!activeTenant) return
     setActionStatus('loading')
     setActionError(null)
     try {
@@ -168,21 +221,16 @@ const AdminTenants = () => {
   }
 
   const handleSaveWhatsApp = async () => {
-    if (!activeTenant || !settings) return
+    if (!activeTenant) return
     setActionStatus('loading')
     setActionError(null)
     try {
-      // Save source to tenant
-      await updateAdminTenant(activeTenant.id, {
-        // whatsapp_source is saved via PATCH tenant if backend supports it
-      }).catch(() => {})
-
       // If chatflow source, save binding
       if (settings.whatsapp_source === 'chatflow') {
         await postTenantWhatsappBinding(activeTenant.id, {
-          token: settings.chatflow_token ?? null,
-          instance_id: settings.chatflow_instance_id ?? null,
-          phone_number: settings.chatflow_phone_number ?? null,
+          token: settings.chatflow_token || null,
+          instance_id: settings.chatflow_instance_id || null,
+          phone_number: settings.chatflow_phone_number || null,
           active: settings.chatflow_active,
         })
       }
@@ -190,9 +238,9 @@ const AdminTenants = () => {
       // Also try to save via settings endpoint
       await updateTenantSettings(activeTenant.id, {
         whatsapp_source: settings.whatsapp_source,
-        chatflow_token: settings.chatflow_token,
-        chatflow_instance_id: settings.chatflow_instance_id,
-        chatflow_phone_number: settings.chatflow_phone_number,
+        chatflow_token: settings.chatflow_token || null,
+        chatflow_instance_id: settings.chatflow_instance_id || null,
+        chatflow_phone_number: settings.chatflow_phone_number || null,
         chatflow_active: settings.chatflow_active,
       }).catch(() => {})
 
@@ -207,22 +255,39 @@ const AdminTenants = () => {
     }
   }
 
-  const handleConnectAmo = async () => {
+  const handleSaveAmoDomain = async () => {
     if (!activeTenant) return
     const domain = amoBaseDomain.trim()
     if (!domain) {
-      setActionError('Укажите домен AmoCRM (например: mycompany.amocrm.ru)')
+      setActionError('Укажите домен AmoCRM')
       return
     }
     setActionStatus('loading')
     setActionError(null)
     try {
-      // Save base_domain first
-      await updateAdminTenant(activeTenant.id, {
-        // amocrm_base_domain: domain - if backend supports
-      }).catch(() => {})
-      
-      const { url } = await getAmoAuthUrl(activeTenant.id, domain)
+      await updateTenantSettings(activeTenant.id, {
+        amocrm_base_domain: domain,
+      })
+      showToast('Домен сохранён ✅')
+    } catch (err) {
+      setActionError(getErrorMessage(err))
+    } finally {
+      setActionStatus('idle')
+    }
+  }
+
+  const handleConnectAmo = async () => {
+    if (!activeTenant) return
+    const domain = amoBaseDomain.trim()
+    if (!domain) {
+      setActionError('Сначала укажите и сохраните домен AmoCRM (например: mycompany.amocrm.ru)')
+      return
+    }
+    setActionStatus('loading')
+    setActionError(null)
+    try {
+      const result = await getAmoAuthUrl(activeTenant.id, domain)
+      const url = result?.url
       if (url) {
         window.open(url, '_blank')
         showToast('Открыто окно авторизации AmoCRM')
@@ -239,12 +304,14 @@ const AdminTenants = () => {
   const handleRefreshAmoStatus = async () => {
     if (!activeTenant) return
     setAmoLoading(true)
+    setActionError(null)
     try {
       const st = await getAmoStatus(activeTenant.id)
       setAmoStatus(st)
       if (st.domain) setAmoBaseDomain(st.domain)
-    } catch {
+    } catch (err) {
       setAmoStatus({ connected: false })
+      setActionError(getErrorMessage(err))
     } finally {
       setAmoLoading(false)
     }
@@ -270,7 +337,7 @@ const AdminTenants = () => {
     setTenantUsersError(null)
     try {
       const list = await getTenantUsers(tenantId)
-      setTenantUsers(list)
+      setTenantUsers(Array.isArray(list) ? list : [])
     } catch (err) {
       setTenantUsers([])
       setTenantUsersError(getErrorMessage(err))
@@ -324,12 +391,14 @@ const AdminTenants = () => {
       setCheckResult({
         tenant_id: tenant.id,
         tenant_name: tenant.name,
-        checks: [{
-          key: 'error',
-          label: 'Ошибка проверки',
-          ok: false,
-          message: getErrorMessage(err),
-        }],
+        checks: [
+          {
+            key: 'error',
+            label: 'Ошибка проверки',
+            ok: false,
+            message: getErrorMessage(err),
+          },
+        ],
         all_ok: false,
       })
     } finally {
@@ -351,7 +420,7 @@ const AdminTenants = () => {
     else if (action === 'open_amocrm' || action === 'reconnect_amo') openEdit(activeTenant, 'amocrm')
   }
 
-  const isBound = settings?.chatflow_binding_exists || (settings?.chatflow_token && settings?.chatflow_instance_id)
+  const isBound = settings.chatflow_binding_exists || (settings.chatflow_token && settings.chatflow_instance_id)
 
   // Escape key handling
   useEffect(() => {
@@ -366,6 +435,7 @@ const AdminTenants = () => {
     return () => window.removeEventListener('keydown', onEscape)
   }, [editOpen, usersOpen, checkOpen])
 
+  // --- Render ---
   return (
     <div className="admin-page">
       <div className="admin-page-header">
@@ -373,14 +443,21 @@ const AdminTenants = () => {
           <h1 className="admin-page-title">Клиенты</h1>
           <p className="admin-page-subtitle">Управление tenants</p>
         </div>
-        <button className="admin-btn admin-btn--primary" type="button" onClick={loadTenants} disabled={status === 'loading'}>
+        <button
+          className="admin-btn admin-btn--primary"
+          type="button"
+          onClick={loadTenants}
+          disabled={status === 'loading'}
+        >
           {status === 'loading' ? 'Загрузка...' : 'Обновить'}
         </button>
       </div>
 
       {error && <div className="admin-alert admin-alert--error">{error}</div>}
 
-      {!error && tenants.length === 0 && status !== 'loading' && (
+      {status === 'loading' && <div className="admin-loading">Загрузка клиентов...</div>}
+
+      {!error && status !== 'loading' && tenants.length === 0 && (
         <div className="admin-empty">Клиентов пока нет</div>
       )}
 
@@ -423,7 +500,9 @@ const AdminTenants = () => {
                     </span>
                   </td>
                   <td>
-                    <span className={`admin-badge ${(t as Record<string, unknown>).amocrm_connected ? 'admin-badge--ok' : 'admin-badge--neutral'}`}>
+                    <span
+                      className={`admin-badge ${(t as Record<string, unknown>).amocrm_connected ? 'admin-badge--ok' : 'admin-badge--neutral'}`}
+                    >
                       {(t as Record<string, unknown>).amocrm_connected ? 'Yes' : '—'}
                     </span>
                   </td>
@@ -431,10 +510,18 @@ const AdminTenants = () => {
                     <button className="admin-btn admin-btn--sm" type="button" onClick={() => openEdit(t)}>
                       Настроить
                     </button>
-                    <button className="admin-btn admin-btn--sm admin-btn--ghost" type="button" onClick={() => openUsers(t)}>
+                    <button
+                      className="admin-btn admin-btn--sm admin-btn--ghost"
+                      type="button"
+                      onClick={() => openUsers(t)}
+                    >
                       Юзеры
                     </button>
-                    <button className="admin-btn admin-btn--sm admin-btn--accent" type="button" onClick={() => openCheck(t)}>
+                    <button
+                      className="admin-btn admin-btn--sm admin-btn--accent"
+                      type="button"
+                      onClick={() => openCheck(t)}
+                    >
                       Проверить
                     </button>
                   </td>
@@ -454,30 +541,65 @@ const AdminTenants = () => {
           <div className="admin-modal admin-modal--wide" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h2 className="admin-modal-title">{activeTenant.name}</h2>
-              <button className="admin-modal-close" type="button" onClick={closeEdit}>×</button>
+              <button className="admin-modal-close" type="button" onClick={closeEdit}>
+                ×
+              </button>
             </div>
             <div className="admin-tabs">
-              <button type="button" className={`admin-tab ${activeTab === 'ai' ? 'admin-tab--active' : ''}`} onClick={() => setActiveTab('ai')}>
+              <button
+                type="button"
+                className={`admin-tab ${activeTab === 'ai' ? 'admin-tab--active' : ''}`}
+                onClick={() => setActiveTab('ai')}
+              >
                 AI Настройки
               </button>
-              <button type="button" className={`admin-tab ${activeTab === 'whatsapp' ? 'admin-tab--active' : ''}`} onClick={() => setActiveTab('whatsapp')}>
+              <button
+                type="button"
+                className={`admin-tab ${activeTab === 'whatsapp' ? 'admin-tab--active' : ''}`}
+                onClick={() => setActiveTab('whatsapp')}
+              >
                 WhatsApp
               </button>
-              <button type="button" className={`admin-tab ${activeTab === 'amocrm' ? 'admin-tab--active' : ''}`} onClick={() => setActiveTab('amocrm')}>
+              <button
+                type="button"
+                className={`admin-tab ${activeTab === 'amocrm' ? 'admin-tab--active' : ''}`}
+                onClick={() => setActiveTab('amocrm')}
+              >
                 AmoCRM
               </button>
             </div>
 
             <div className="admin-modal-body">
-              {settingsLoading && <div className="admin-loading">Загрузка настроек...</div>}
+              {/* LOADING STATE */}
+              {settingsStatus === 'loading' && (
+                <div className="admin-loading-panel">
+                  <div className="admin-spinner" />
+                  <p>Загрузка настроек...</p>
+                </div>
+              )}
 
-              {!settingsLoading && settings && activeTab === 'ai' && (
+              {/* ERROR STATE */}
+              {settingsStatus === 'error' && (
+                <div className="admin-error-panel">
+                  <div className="admin-error-icon">⚠️</div>
+                  <h3>Ошибка загрузки</h3>
+                  <p>{settingsError || 'Не удалось загрузить настройки'}</p>
+                  <button className="admin-btn admin-btn--primary" type="button" onClick={handleRetrySettings}>
+                    Повторить
+                  </button>
+                </div>
+              )}
+
+              {/* READY STATE - AI Tab */}
+              {settingsStatus === 'ready' && activeTab === 'ai' && (
                 <div className="admin-settings-section">
                   <div className="admin-settings-block">
                     <div className="admin-settings-row">
                       <div className="admin-settings-info">
                         <div className="admin-settings-label">AI-менеджер (глобально)</div>
-                        <div className="admin-settings-hint">Когда выключено — бот не отвечает, но лиды сохраняются.</div>
+                        <div className="admin-settings-hint">
+                          Когда выключено — бот не отвечает, но лиды сохраняются.
+                        </div>
                       </div>
                       <label className="admin-switch">
                         <input
@@ -485,7 +607,9 @@ const AdminTenants = () => {
                           checked={settings.ai_enabled !== false}
                           onChange={(e) => setSettings({ ...settings, ai_enabled: e.target.checked })}
                         />
-                        <span className="admin-switch-track"><span className="admin-switch-thumb" /></span>
+                        <span className="admin-switch-track">
+                          <span className="admin-switch-thumb" />
+                        </span>
                       </label>
                     </div>
                   </div>
@@ -517,32 +641,41 @@ const AdminTenants = () => {
 
                   {actionError && <div className="admin-alert admin-alert--error">{actionError}</div>}
 
-                  <button className="admin-btn admin-btn--primary" type="button" onClick={handleSaveAi} disabled={actionStatus === 'loading'}>
+                  <button
+                    className="admin-btn admin-btn--primary"
+                    type="button"
+                    onClick={handleSaveAi}
+                    disabled={actionStatus === 'loading'}
+                  >
                     {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить'}
                   </button>
                 </div>
               )}
 
-              {!settingsLoading && settings && activeTab === 'whatsapp' && (
+              {/* READY STATE - WhatsApp Tab */}
+              {settingsStatus === 'ready' && activeTab === 'whatsapp' && (
                 <div className="admin-settings-section">
                   <div className="admin-settings-block">
                     <label className="admin-label">Источник WhatsApp</label>
                     <select
                       className="admin-input"
                       value={settings.whatsapp_source ?? 'chatflow'}
-                      onChange={(e) => setSettings({ ...settings, whatsapp_source: e.target.value as TenantSettings['whatsapp_source'] })}
+                      onChange={(e) =>
+                        setSettings({ ...settings, whatsapp_source: e.target.value as TenantSettings['whatsapp_source'] })
+                      }
                     >
                       <option value="chatflow">ChatFlow</option>
                       <option value="amomarket">AmoCRM Marketplace</option>
                     </select>
-                    <div className="admin-settings-hint" style={{ marginTop: 8, color: 'var(--warning)' }}>
+                    <div className="admin-settings-hint" style={{ marginTop: 8, color: '#f59e0b' }}>
                       Выберите только один источник. Нельзя использовать оба.
                     </div>
                   </div>
 
                   {settings.whatsapp_source === 'amomarket' ? (
                     <div className="admin-info-box">
-                      <strong>AmoCRM Marketplace</strong><br />
+                      <strong>AmoCRM Marketplace</strong>
+                      <br />
                       WhatsApp подключается внутри AmoCRM. Вебхук настраивать не нужно.
                     </div>
                   ) : (
@@ -553,7 +686,8 @@ const AdminTenants = () => {
 
                       {settings.chatflow_token_masked && (
                         <div className="admin-info-box">
-                          <strong>Текущий токен:</strong> {settings.chatflow_token_masked}<br />
+                          <strong>Текущий токен:</strong> {settings.chatflow_token_masked}
+                          <br />
                           <small>Вставьте новый токен ниже, чтобы обновить.</small>
                         </div>
                       )}
@@ -594,14 +728,18 @@ const AdminTenants = () => {
 
                         <div className="admin-settings-block">
                           <div className="admin-settings-row">
-                            <span className="admin-label" style={{ marginBottom: 0 }}>Активен</span>
+                            <span className="admin-label" style={{ marginBottom: 0 }}>
+                              Активен
+                            </span>
                             <label className="admin-switch">
                               <input
                                 type="checkbox"
                                 checked={settings.chatflow_active !== false}
                                 onChange={(e) => setSettings({ ...settings, chatflow_active: e.target.checked })}
                               />
-                              <span className="admin-switch-track"><span className="admin-switch-thumb" /></span>
+                              <span className="admin-switch-track">
+                                <span className="admin-switch-thumb" />
+                              </span>
                             </label>
                           </div>
                         </div>
@@ -611,48 +749,81 @@ const AdminTenants = () => {
 
                   {actionError && <div className="admin-alert admin-alert--error">{actionError}</div>}
 
-                  <button className="admin-btn admin-btn--primary" type="button" onClick={handleSaveWhatsApp} disabled={actionStatus === 'loading'}>
+                  <button
+                    className="admin-btn admin-btn--primary"
+                    type="button"
+                    onClick={handleSaveWhatsApp}
+                    disabled={actionStatus === 'loading'}
+                  >
                     {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить привязку'}
                   </button>
                 </div>
               )}
 
-              {!settingsLoading && activeTab === 'amocrm' && (
+              {/* READY STATE - AmoCRM Tab */}
+              {settingsStatus === 'ready' && activeTab === 'amocrm' && (
                 <div className="admin-settings-section">
                   {amoLoading ? (
-                    <div className="admin-loading">Загрузка статуса...</div>
+                    <div className="admin-loading-panel">
+                      <div className="admin-spinner" />
+                      <p>Загрузка статуса...</p>
+                    </div>
                   ) : (
                     <>
-                      <div className={`admin-status-box ${amoStatus?.connected ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}>
+                      <div
+                        className={`admin-status-box ${amoStatus?.connected ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}
+                      >
                         {amoStatus?.connected ? '✅ AmoCRM подключён' : '⚠️ AmoCRM не подключён'}
                       </div>
 
                       {amoStatus?.connected && (
                         <div className="admin-info-box">
-                          <strong>Домен:</strong> {amoStatus.domain || '—'}<br />
-                          <strong>Истекает:</strong> {amoStatus.expires_at ? new Date(amoStatus.expires_at).toLocaleString() : '—'}
+                          <strong>Домен:</strong> {amoStatus.domain || '—'}
+                          <br />
+                          <strong>Истекает:</strong>{' '}
+                          {amoStatus.expires_at ? new Date(amoStatus.expires_at).toLocaleString() : '—'}
                         </div>
                       )}
 
                       <div className="admin-settings-block">
                         <label className="admin-label">Домен AmoCRM</label>
-                        <input
-                          className="admin-input"
-                          type="text"
-                          value={amoBaseDomain}
-                          onChange={(e) => setAmoBaseDomain(e.target.value)}
-                          placeholder="mycompany.amocrm.ru"
-                        />
+                        <div className="admin-form-row-inline">
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={amoBaseDomain}
+                            onChange={(e) => setAmoBaseDomain(e.target.value)}
+                            placeholder="mycompany.amocrm.ru"
+                          />
+                          <button
+                            className="admin-btn admin-btn--secondary"
+                            type="button"
+                            onClick={handleSaveAmoDomain}
+                            disabled={actionStatus === 'loading'}
+                          >
+                            Сохранить
+                          </button>
+                        </div>
                         <div className="admin-settings-hint" style={{ marginTop: 4 }}>
-                          Укажите домен вашего AmoCRM аккаунта (без https://)
+                          Укажите домен вашего AmoCRM (без https://)
                         </div>
                       </div>
 
                       <div className="admin-btn-group">
-                        <button className="admin-btn admin-btn--secondary" type="button" onClick={handleConnectAmo} disabled={actionStatus === 'loading'}>
+                        <button
+                          className="admin-btn admin-btn--primary"
+                          type="button"
+                          onClick={handleConnectAmo}
+                          disabled={actionStatus === 'loading'}
+                        >
                           {amoStatus?.connected ? 'Переподключить' : 'Подключить AmoCRM'}
                         </button>
-                        <button className="admin-btn admin-btn--ghost" type="button" onClick={handleRefreshAmoStatus} disabled={amoLoading}>
+                        <button
+                          className="admin-btn admin-btn--ghost"
+                          type="button"
+                          onClick={handleRefreshAmoStatus}
+                          disabled={amoLoading}
+                        >
                           Обновить статус
                         </button>
                       </div>
@@ -681,7 +852,9 @@ const AdminTenants = () => {
                                       value={m.stage_id ?? ''}
                                       onChange={(e) => {
                                         const val = e.target.value.trim()
-                                        setAmoMapping((prev) => prev.map((x, j) => j === i ? { ...x, stage_id: val || null } : x))
+                                        setAmoMapping((prev) =>
+                                          prev.map((x, j) => (j === i ? { ...x, stage_id: val || null } : x))
+                                        )
                                       }}
                                       placeholder="ID стадии"
                                     />
@@ -690,13 +863,23 @@ const AdminTenants = () => {
                               ))}
                             </tbody>
                           </table>
-                          <button className="admin-btn admin-btn--primary" type="button" onClick={handleSaveAmoMapping} disabled={actionStatus === 'loading'} style={{ marginTop: 12 }}>
+                          <button
+                            className="admin-btn admin-btn--primary"
+                            type="button"
+                            onClick={handleSaveAmoMapping}
+                            disabled={actionStatus === 'loading'}
+                            style={{ marginTop: 12 }}
+                          >
                             {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить маппинг'}
                           </button>
                         </div>
                       )}
 
-                      {actionError && <div className="admin-alert admin-alert--error" style={{ marginTop: 16 }}>{actionError}</div>}
+                      {actionError && (
+                        <div className="admin-alert admin-alert--error" style={{ marginTop: 16 }}>
+                          {actionError}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -712,7 +895,9 @@ const AdminTenants = () => {
           <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h2 className="admin-modal-title">Пользователи — {activeTenant.name}</h2>
-              <button className="admin-modal-close" type="button" onClick={closeUsers}>×</button>
+              <button className="admin-modal-close" type="button" onClick={closeUsers}>
+                ×
+              </button>
             </div>
             <div className="admin-modal-body">
               {tenantUsersError && <div className="admin-alert admin-alert--error">{tenantUsersError}</div>}
@@ -758,7 +943,11 @@ const AdminTenants = () => {
                     {actionStatus === 'loading' ? '...' : 'Добавить'}
                   </button>
                 </div>
-                {actionError && <div className="admin-alert admin-alert--error" style={{ marginTop: 12 }}>{actionError}</div>}
+                {actionError && (
+                  <div className="admin-alert admin-alert--error" style={{ marginTop: 12 }}>
+                    {actionError}
+                  </div>
+                )}
               </form>
             </div>
           </div>
@@ -771,27 +960,38 @@ const AdminTenants = () => {
           <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h2 className="admin-modal-title">Проверка — {activeTenant.name}</h2>
-              <button className="admin-modal-close" type="button" onClick={closeCheck}>×</button>
+              <button className="admin-modal-close" type="button" onClick={closeCheck}>
+                ×
+              </button>
             </div>
             <div className="admin-modal-body">
-              {checkLoading && <div className="admin-loading">Проверяем настройки...</div>}
+              {checkLoading && (
+                <div className="admin-loading-panel">
+                  <div className="admin-spinner" />
+                  <p>Проверяем настройки...</p>
+                </div>
+              )}
 
               {!checkLoading && checkResult && (
                 <>
-                  <div className={`admin-status-box ${checkResult.all_ok ? 'admin-status-box--ok' : 'admin-status-box--warn'}`} style={{ marginBottom: 16 }}>
+                  <div
+                    className={`admin-status-box ${checkResult.all_ok ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}
+                    style={{ marginBottom: 16 }}
+                  >
                     {checkResult.all_ok ? '✅ Все проверки пройдены!' : '⚠️ Есть проблемы — см. ниже'}
                   </div>
 
                   <div className="admin-check-list">
                     {checkResult.checks.map((c) => (
-                      <div key={c.key} className={`admin-check-item ${c.ok ? 'admin-check-item--ok' : 'admin-check-item--error'}`}>
+                      <div
+                        key={c.key}
+                        className={`admin-check-item ${c.ok ? 'admin-check-item--ok' : 'admin-check-item--error'}`}
+                      >
                         <div className="admin-check-icon">{c.ok ? '✅' : '❌'}</div>
                         <div className="admin-check-content">
                           <div className="admin-check-label">{c.label || c.key}</div>
                           {c.message && <div className="admin-check-message">{c.message}</div>}
-                          {!c.message && !c.ok && (
-                            <div className="admin-check-message">Требуется настройка</div>
-                          )}
+                          {!c.message && !c.ok && <div className="admin-check-message">Требуется настройка</div>}
                         </div>
                         {c.action && !c.ok && (
                           <button
