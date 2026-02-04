@@ -18,6 +18,31 @@ export type DetailedApiError = {
   tenantId?: string | number
 }
 
+/** Map technical error messages to human-readable ones */
+function humanizeError(msg: string): string {
+  // Network errors
+  if (/failed to fetch|network|cors|load failed|timeout/i.test(msg)) {
+    return 'Ошибка сети: сервер недоступен или CORS. Попробуйте обновить страницу.'
+  }
+  // Database errors
+  if (/programmingerror|sqlalchemy|psycopg|database|relation.*does not exist/i.test(msg)) {
+    return 'Ошибка базы данных на сервере. Откройте Диагностику и отправьте лог разработчику.'
+  }
+  // Auth errors
+  if (/unauthorized|401|invalid.*token|expired/i.test(msg)) {
+    return 'Сессия истекла. Войдите снова.'
+  }
+  // Permission errors
+  if (/forbidden|403|access.*denied|permission/i.test(msg)) {
+    return 'Недостаточно прав для этого действия.'
+  }
+  // Validation errors
+  if (/validation|422|invalid.*value|required/i.test(msg)) {
+    return msg // Keep validation errors as-is, they're usually clear
+  }
+  return msg
+}
+
 /** Global API error parser - use this everywhere to extract meaningful error info */
 export function parseApiError(err: unknown): { status?: number; detail: string; raw?: unknown } {
   if (!err) return { detail: 'Неизвестная ошибка' }
@@ -25,20 +50,18 @@ export function parseApiError(err: unknown): { status?: number; detail: string; 
   // Already a DetailedApiError
   if (typeof err === 'object' && err !== null && 'detail' in err) {
     const e = err as DetailedApiError
+    const rawDetail = e.detail || e.message || 'Ошибка запроса'
     return {
       status: e.status,
-      detail: e.detail || e.message || 'Ошибка запроса',
+      detail: humanizeError(rawDetail),
       raw: err,
     }
   }
   
   // Regular Error with message
   if (err instanceof Error) {
-    const isNetwork = /failed to fetch|network|cors|load failed|timeout/i.test(err.message)
     return {
-      detail: isNetwork
-        ? 'Ошибка сети: сервер недоступен или CORS. Попробуйте обновить страницу.'
-        : err.message,
+      detail: humanizeError(err.message),
       raw: err,
     }
   }
@@ -46,27 +69,31 @@ export function parseApiError(err: unknown): { status?: number; detail: string; 
   // Object with detail/message
   if (typeof err === 'object' && err !== null) {
     const e = err as Record<string, unknown>
-    const detail = e.detail ?? e.message ?? e.error
-    if (typeof detail === 'string') {
-      return { status: e.status as number | undefined, detail, raw: err }
-    }
+    let detail = e.detail ?? e.message ?? e.error
+    
+    // Ensure we never return [object Object]
     if (detail && typeof detail === 'object') {
       try {
-        return { status: e.status as number | undefined, detail: JSON.stringify(detail), raw: err }
+        detail = JSON.stringify(detail)
       } catch {
-        // ignore
+        detail = 'Ошибка запроса (неизвестный формат)'
       }
+    }
+    
+    if (typeof detail === 'string') {
+      return { status: e.status as number | undefined, detail: humanizeError(detail), raw: err }
     }
   }
   
   // String
   if (typeof err === 'string') {
-    return { detail: err }
+    return { detail: humanizeError(err) }
   }
   
-  // Fallback
+  // Fallback - never show raw objects
   try {
-    return { detail: JSON.stringify(err).slice(0, 300) }
+    const str = JSON.stringify(err)
+    return { detail: humanizeError(str.slice(0, 300)) }
   } catch {
     return { detail: 'Ошибка запроса' }
   }
@@ -1811,13 +1838,29 @@ export const getTenantSettings = async (
 export const updateTenantSettings = async (
   tenantId: string | number,
   payload: Partial<TenantSettings>,
-): Promise<void> => {
-  const url = fullUrl(`/api/admin/tenants/${tenantId}/settings`)
-  const response = await fetch(url, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify(payload),
-  })
+): Promise<TenantSettings | null> => {
+  const requestUrl = fullUrl(`/api/admin/tenants/${tenantId}/settings`)
+  const headers = authHeaders()
+  
+  let response: Response
+  try {
+    response = await fetch(requestUrl, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(payload),
+    })
+  } catch (e) {
+    // Network error - throw detailed error
+    const err: DetailedApiError = {
+      message: e instanceof Error ? e.message : 'Network error',
+      url: requestUrl,
+      hasAuthHeader: Boolean((headers as Record<string, string>).Authorization),
+      tenantId,
+      detail: 'Не удалось отправить запрос. Проверьте соединение с интернетом.',
+    }
+    throw err
+  }
+  
   if (response.status === 404) {
     // fallback: update tenant + whatsapp binding separately
     await updateAdminTenant(tenantId, {
@@ -1832,9 +1875,28 @@ export const updateTenantSettings = async (
         active: payload.chatflow_active,
       })
     }
-    return
+    // Return null to indicate fallback was used - caller should refetch
+    return null
   }
-  if (!response.ok) throw await buildError(response)
+  
+  if (!response.ok) {
+    const detailedErr = await buildDetailedError(response, requestUrl, 
+      Boolean((headers as Record<string, string>).Authorization), 
+      { tenantId }
+    )
+    throw detailedErr
+  }
+  
+  // Try to return updated settings if backend provides them
+  try {
+    const text = await response.text()
+    if (text) {
+      return JSON.parse(text) as TenantSettings
+    }
+  } catch {
+    // Backend didn't return JSON, that's ok
+  }
+  return null
 }
 
 /* --- AmoCRM integration --- */

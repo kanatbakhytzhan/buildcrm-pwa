@@ -125,6 +125,23 @@ const AdminTenants = () => {
 
   useEffect(() => {
     loadTenants()
+    
+    // Handle AmoCRM callback redirect
+    const urlParams = new URLSearchParams(window.location.search)
+    const amoResult = urlParams.get('amocrm')
+    const tenantIdParam = urlParams.get('tenant_id')
+    
+    if (amoResult === 'connected' && tenantIdParam) {
+      showToast('✅ AmoCRM успешно подключён!')
+      // Clean up URL
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, '', newUrl)
+    } else if (amoResult === 'error') {
+      const errorMsg = urlParams.get('error') || 'Ошибка подключения AmoCRM'
+      showToast(`❌ ${errorMsg}`)
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, '', newUrl)
+    }
   }, [loadTenants])
 
   // --- Settings Modal ---
@@ -227,16 +244,24 @@ const AdminTenants = () => {
     setActionStatus('loading')
     setActionError(null)
     try {
-      await updateTenantSettings(activeTenant.id, {
+      const updatedSettings = await updateTenantSettings(activeTenant.id, {
         ai_enabled: settings.ai_enabled,
         ai_prompt: settings.ai_prompt,
         ai_after_submit_behavior: settings.ai_after_submit_behavior,
       })
-      await loadSettings(activeTenant.id)
+      
+      // If backend returned updated settings, use them; otherwise refetch
+      if (updatedSettings) {
+        setSettings(safeSettings(updatedSettings))
+      } else {
+        await loadSettings(activeTenant.id)
+      }
       await loadTenants()
       showToast('Сохранено ✅')
     } catch (err) {
-      setActionError(getErrorMessage(err))
+      const msg = getErrorMessage(err)
+      // Добавляем более понятные сообщения для известных ошибок
+      setActionError(msg)
     } finally {
       setActionStatus('idle')
     }
@@ -258,16 +283,20 @@ const AdminTenants = () => {
       }
 
       // Also try to save via settings endpoint
-      await updateTenantSettings(activeTenant.id, {
+      const updatedSettings = await updateTenantSettings(activeTenant.id, {
         whatsapp_source: settings.whatsapp_source,
         chatflow_token: settings.chatflow_token || null,
         chatflow_instance_id: settings.chatflow_instance_id || null,
         chatflow_phone_number: settings.chatflow_phone_number || null,
         chatflow_active: settings.chatflow_active,
-      }).catch(() => {})
+      }).catch(() => null)
 
-      // Refetch to confirm saved
-      await loadSettings(activeTenant.id)
+      // Use returned settings or refetch
+      if (updatedSettings) {
+        setSettings(safeSettings(updatedSettings))
+      } else {
+        await loadSettings(activeTenant.id)
+      }
       await loadTenants()
       showToast('Сохранено ✅')
     } catch (err) {
@@ -300,21 +329,33 @@ const AdminTenants = () => {
 
   const handleConnectAmo = async () => {
     if (!activeTenant) return
-    const domain = amoBaseDomain.trim()
+    let domain = amoBaseDomain.trim()
+    
+    // Normalize domain from full URL if needed
+    domain = normalizeAmoDomain(domain)
+    setAmoBaseDomain(domain)
+    
     if (!domain) {
-      setActionError('Сначала укажите и сохраните домен AmoCRM (например: mycompany.amocrm.ru)')
+      setActionError('Сначала укажите домен AmoCRM (например: mycompany.amocrm.ru)')
       return
     }
+    
     setActionStatus('loading')
     setActionError(null)
     try {
+      // First save the domain to settings
+      await updateTenantSettings(activeTenant.id, {
+        amocrm_base_domain: domain,
+      }).catch(() => {})
+      
+      // Then get auth URL
       const result = await getAmoAuthUrl(activeTenant.id, domain)
       const url = result?.url
       if (url) {
+        showToast('Откроется окно авторизации AmoCRM. После подтверждения вернитесь сюда.')
         window.open(url, '_blank')
-        showToast('Открыто окно авторизации AmoCRM')
       } else {
-        setActionError('URL авторизации не получен. Проверьте домен.')
+        setActionError('URL авторизации не получен. Проверьте, что домен корректный и интеграция настроена в AmoCRM.')
       }
     } catch (err) {
       setActionError(getErrorMessage(err))
