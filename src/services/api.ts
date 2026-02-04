@@ -2130,11 +2130,38 @@ export const getAmoPipelineMapping = async (
 export const saveAmoPipelineMapping = async (
   tenantId: string | number,
   mapping: AmoPipelineMapping[],
+  pipelineId?: string | number,
 ): Promise<void> => {
-  await request<unknown>(`/api/admin/tenants/${tenantId}/amocrm/mapping`, {
-    method: 'POST',
+  // Convert array [{stage_key, stage_id}] to dictionary {stage_key: stage_id}
+  const mappingDict: Record<string, number> = {}
+  mapping.forEach(m => {
+    if (m.stage_id) {
+      mappingDict[m.stage_key] = Number(m.stage_id)
+    }
+  })
+
+  await request<unknown>(`/api/admin/tenants/${tenantId}/amocrm/pipeline-mapping`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ mapping }),
+    body: JSON.stringify({
+      mapping: mappingDict,
+      primary_pipeline_id: pipelineId
+    }),
+  })
+}
+
+/** PUT /api/admin/tenants/{id}/amocrm/primary-pipeline */
+export const savePrimaryPipeline = async (
+  tenantId: string | number,
+  pipelineId: string | number,
+): Promise<void> => {
+  await request<unknown>(`/api/admin/tenants/${tenantId}/amocrm/primary-pipeline`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ pipeline_id: pipelineId }),
   })
 }
 

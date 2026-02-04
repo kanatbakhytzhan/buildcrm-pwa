@@ -15,9 +15,8 @@ import {
   type TenantWhatsapp,
   normalizeAmoDomain,
   parseApiError,
-  postTenantWhatsappBinding,
   saveAmoPipelineMapping,
-  saveTenantDefaultPipeline,
+  savePrimaryPipeline,
   testAmoSync,
   selfCheckTenant,
   STAGE_NAME_TO_KEY,
@@ -131,7 +130,7 @@ const AdminTenants = () => {
   const [actionError, setActionError] = useState<string | null>(null)
 
   // Diagnostics
-  const [lastCheck, setLastCheck] = useState<{ status: 'ok' | 'fail'; time: string; raw?: unknown } | null>(null)
+  const [lastCheck, _setLastCheck] = useState<{ status: 'ok' | 'fail'; time: string; raw?: unknown } | null>(null)
 
   // --- Data Loading ---
 
@@ -394,14 +393,34 @@ const AdminTenants = () => {
     }
   }
 
-  const handleSaveDefaultPipeline = async () => {
+  const handleSavePrimaryPipeline = async () => {
     if (!activeTenant || !selectedPipelineId) return
     setActionStatus('loading')
     try {
-      await saveTenantDefaultPipeline(activeTenant.id, selectedPipelineId)
+      await savePrimaryPipeline(activeTenant.id, selectedPipelineId)
       // Update local status to reflect we have a pipeline
       setAmoStatus(prev => ({ ...prev, pipeline_id: selectedPipelineId }))
       showToast('Воронка по умолчанию сохранена ✅')
+    } catch (err) {
+      setActionError(getErrorMessage(err))
+    } finally {
+      setActionStatus('idle')
+    }
+  }
+
+  const handleSaveAmoMapping = async () => {
+    if (!activeTenant) return
+    setActionStatus('loading')
+    setActionError(null)
+
+    try {
+      // Pass selectedPipelineId to link mapping to the correct pipeline
+      await saveAmoPipelineMapping(activeTenant.id, amoMapping, selectedPipelineId)
+
+      showToast('Маппинг сохранён успешно ✅')
+
+      // Refetch to confirm
+      await loadSettings(activeTenant.id)
     } catch (err) {
       setActionError(getErrorMessage(err))
     } finally {
@@ -519,77 +538,31 @@ const AdminTenants = () => {
     }
   }
 
-  /* AI SAVE with Verification */
+  /* AI SAVE with Dirty Checking */
   const handleSaveAi = async () => {
     if (!activeTenant) return
     setActionStatus('loading')
     setActionError(null)
 
-    // Store current state for rollback
-    const currentValues = { ...settings }
-
     try {
-      // 1. Prepare Payload
-      // Check if user actively cleared prompt (handled via button) or modified it
-      // Standard rule: don't send "" if it wasn't explicitly cleared (we'll assume "" in input means 'no change' if not dirty? No, dirty field means changed.)
-      // User Req: "Don't send empty strings". "Default: no clear".
-
       const payload: Partial<TenantSettings> = {
         ai_enabled: settings.ai_enabled,
         ai_after_submit_behavior: settings.ai_after_submit_behavior,
       }
 
-      // Only include ai_prompt if it has content. To clear, use the Clear button.
-      // If user manually deleted text, settings.ai_prompt is "". We SKIP it to avoid wiping backend accidentally.
-      if (settings.ai_prompt && settings.ai_prompt.trim() !== '') {
-        if (dirtyFields.has('ai_prompt')) {
-          payload.ai_prompt = settings.ai_prompt
-        }
+      // Only send ai_prompt if user explicitly changed it
+      if (dirtyFields.has('ai_prompt')) {
+        payload.ai_prompt = settings.ai_prompt
       }
 
-      // 2. PATCH request
       await updateTenantSettings(activeTenant.id, payload)
 
-      // 3. VERIFICATION GET
-      // Must refetch to confirm it's actually saved
-      const verifiedSettings = await getTenantSettings(activeTenant.id)
+      // Refetch to confirm persistence
+      await loadSettings(activeTenant.id)
 
-      // 4. Compare logic
-      const promptMatch = verifiedSettings?.ai_prompt === (payload.ai_prompt || verifiedSettings?.ai_prompt)
-      const enabledMatch = verifiedSettings?.ai_enabled === payload.ai_enabled
-
-      // Explicit check for "Empty Response" bug
-      // If we sent a prompt but got back mismatch/null, and the raw response looks empty or weird
-      if (payload.ai_prompt && !promptMatch) {
-        console.error('[AdminTenants] Verification failed.', { sent: payload.ai_prompt, got: verifiedSettings?.ai_prompt, raw: verifiedSettings._raw })
-
-        // If raw object is missing keys or empty
-        const raw = verifiedSettings._raw as Record<string, unknown>
-        const isEmpty = !raw || Object.keys(raw).length === 0 || (raw.settings && Object.keys(raw.settings as object).length === 0)
-
-        if (isEmpty) {
-          setLastCheck({ status: 'fail', time: new Date().toLocaleTimeString(), raw: verifiedSettings._raw })
-          throw new Error('Сервер вернул пустые настройки. Проверь backend /tenant/settings')
-        }
-      }
-
-      if (promptMatch && enabledMatch) {
-        setSettings(safeSettings(verifiedSettings))
-        // Update ref to prevent "unsaved changes" warning if user closes
-        settingsRef.current = safeSettings(verifiedSettings)
-        setDirtyFields(new Set()) // Clear dirty only on success
-
-        setLastCheck({ status: 'ok', time: new Date().toLocaleTimeString() })
-        showToast('Сохранено и проверено ✅')
-      } else {
-        setLastCheck({ status: 'fail', time: new Date().toLocaleTimeString(), raw: verifiedSettings._raw })
-        throw new Error('Данные отправлены, но проверка не прошла (данные не совпадают).')
-      }
-
-      await loadTenants()
+      showToast('Настройки AI сохранены ✅')
+      setDirtyFields(new Set())
     } catch (err) {
-      // On error, restore or keep current state
-      setSettings(currentValues)
       setActionError(getErrorMessage(err))
     } finally {
       setActionStatus('idle')
@@ -618,132 +591,33 @@ const AdminTenants = () => {
     }
   }
 
-  /* WhatsApp SAVE with Verification */
+  /* WhatsApp SAVE with Dirty Checking */
   const handleSaveWhatsApp = async () => {
     if (!activeTenant) return
     setActionStatus('loading')
     setActionError(null)
 
-    const currentValues = { ...settings }
-
     try {
-      // 1. Prepare Data
-      // Helper to normalize phone
-      const cleanPhone = (p: string | null | undefined) => p?.replace(/[^\d+]/g, '') || null
-
-      const tokenToSend = dirtyFields.has('chatflow_token') && settings.chatflow_token && settings.chatflow_token.trim().length > 0
-        ? settings.chatflow_token.trim()
-        : undefined
-
-      // 2. If 'chatflow' source -> POST binding
-      if (settings.whatsapp_source === 'chatflow') {
-        const bindingPayload: {
-          token?: string | null
-          instance_id?: string | null
-          phone_number?: string | null
-          active?: boolean
-        } = {
-          instance_id: settings.chatflow_instance_id || null,
-          phone_number: settings.chatflow_phone_number || null,
-          active: settings.chatflow_active,
-        }
-
-        // Only include token if user provided a new one
-        // If undefined, it won't overwrite backend (assuming backend handles patch-like behavior or existing value retention)
-        // If user wants to clear types "", we technically skip sending it to avoid accidental wipe
-        if (tokenToSend) {
-          bindingPayload.token = tokenToSend
-        }
-
-        await postTenantWhatsappBinding(activeTenant.id, bindingPayload)
-      }
-
-      // 3. Update Settings core fields
-      const settingsPayload: Partial<TenantSettings> = {
+      const payload: Partial<TenantSettings> = {
         whatsapp_source: settings.whatsapp_source,
-        chatflow_instance_id: settings.chatflow_instance_id || null,
-        chatflow_phone_number: settings.chatflow_phone_number || null,
+        chatflow_instance_id: settings.chatflow_instance_id,
+        chatflow_phone_number: settings.chatflow_phone_number,
         chatflow_active: settings.chatflow_active,
       }
-      if (tokenToSend) {
-        settingsPayload.chatflow_token = tokenToSend
+
+      // Only send token if user explicitly changed it
+      if (dirtyFields.has('chatflow_token') && settings.chatflow_token) {
+        payload.chatflow_token = settings.chatflow_token
       }
 
-      // Ignore error here if binding worked, as this is secondary
-      await updateTenantSettings(activeTenant.id, settingsPayload).catch(() => null)
+      await updateTenantSettings(activeTenant.id, payload)
 
-      // 4. VERIFICATION GET
-      // Fetch binding and settings to confirm
-      // We look at the list of Whatsapps to find the ChatFlow one
-      const [verifiedSettings, verifiedBindings] = await Promise.all([
-        getTenantSettings(activeTenant.id),
-        getTenantWhatsapps(activeTenant.id)
-      ])
-      const verifiedBinding = verifiedBindings && verifiedBindings.length > 0 ? verifiedBindings[0] : null
+      // Refetch to confirm persistence
+      await loadSettings(activeTenant.id)
 
-      // 5. Normalization & Comparison
-      const sentInstance = (settings.chatflow_instance_id || '').trim()
-      const gotInstance = (verifiedBinding?.instance_id || verifiedSettings.chatflow_instance_id || '').trim()
-
-      const sentPhone = cleanPhone(settings.chatflow_phone_number)
-      const gotPhone = cleanPhone(verifiedBinding?.phone_number || verifiedSettings.chatflow_phone_number)
-
-      const sentActive = settings.chatflow_active !== false
-      const gotActive = (verifiedBinding?.active ?? verifiedSettings.chatflow_active) !== false
-
-      // Token Check:
-      // If we sent a token, we expect backend to have it (masked or not).
-      // We do NOT compare string equality because backend masks it.
-      // We just check that binding EXISTS and (if we sent one) it has a token.
-      const sentToken = !!tokenToSend
-      const gotToken = !!(verifiedBinding?.token || verifiedSettings.chatflow_token || verifiedSettings.chatflow_token_masked)
-
-      const instanceMatch = sentInstance === gotInstance
-      const phoneMatch = sentPhone === gotPhone
-      const activeMatch = sentActive === gotActive
-      const tokenMatch = sentToken ? gotToken : true // If we didn't send token, we assume existing is fine/unchanged
-
-      if (instanceMatch && phoneMatch && activeMatch && tokenMatch) {
-        // SUCCESS
-        // Merge verified data back into local state
-        if (verifiedSettings) {
-          // Prefer binding data if available
-          verifiedSettings.chatflow_instance_id = verifiedBinding?.instance_id || verifiedSettings.chatflow_instance_id
-          verifiedSettings.chatflow_phone_number = verifiedBinding?.phone_number || verifiedSettings.chatflow_phone_number
-          verifiedSettings.chatflow_active = verifiedBinding?.active ?? verifiedSettings.chatflow_active
-          // Don't overwrite local token with masked one if we just typed it ? 
-          // Actually better to keep what user typed or clear it? 
-          // Standard: keep what verifiedSettings has (masked) so user sees it's saved.
-          // But if we just typed 'abc', UI turns into '***'? That's fine.
-        }
-
-        setSettings(safeSettings(verifiedSettings))
-        setServerWhatsApp({
-          token: verifiedSettings.chatflow_token,
-          instance_id: verifiedSettings.chatflow_instance_id,
-          phone_number: verifiedSettings.chatflow_phone_number,
-          active: verifiedSettings.chatflow_active,
-          binding_exists: !!(verifiedBinding?.token || verifiedSettings.chatflow_token_masked),
-        })
-
-        setDirtyFields(new Set())
-        setLastCheck({ status: 'ok', time: new Date().toLocaleTimeString() })
-        showToast('WhatsApp настройки обновлены ✅')
-      } else {
-        // FAILURE
-        console.error('[AdminTenants] WA Verify Failed', {
-          sent: { instance: sentInstance, phone: sentPhone, active: sentActive, tokenSent: sentToken },
-          got: { instance: gotInstance, phone: gotPhone, active: gotActive, tokenGot: gotToken }
-        })
-
-        setLastCheck({ status: 'fail', time: new Date().toLocaleTimeString(), raw: { verifiedSettings, verifiedBinding } })
-        throw new Error('Проверка не прошла: данные на сервере отличаются от отправленных.')
-      }
-
-      await loadTenants()
-
+      showToast('Настройки WhatsApp сохранены ✅')
+      setDirtyFields(new Set())
     } catch (err) {
-      setSettings(currentValues)
       setActionError(getErrorMessage(err))
     } finally {
       setActionStatus('idle')
@@ -841,20 +715,6 @@ const AdminTenants = () => {
       setActionError(getErrorMessage(err))
     } finally {
       setAmoLoading(false)
-    }
-  }
-
-  const handleSaveAmoMapping = async () => {
-    if (!activeTenant) return
-    setActionStatus('loading')
-    setActionError(null)
-    try {
-      await saveAmoPipelineMapping(activeTenant.id, amoMapping)
-      showToast('Маппинг сохранён ✅')
-    } catch (err) {
-      setActionError(getErrorMessage(err))
-    } finally {
-      setActionStatus('idle')
     }
   }
 
@@ -1694,7 +1554,7 @@ const AdminTenants = () => {
                                     </select>
                                     <button
                                       className="admin-btn admin-btn--secondary"
-                                      onClick={handleSaveDefaultPipeline}
+                                      onClick={handleSavePrimaryPipeline}
                                       disabled={actionStatus === 'loading' || !selectedPipelineId}
                                     >
                                       Сохранить
