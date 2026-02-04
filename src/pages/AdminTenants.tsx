@@ -4,6 +4,7 @@ import {
   addTenantUser,
   getAdminTenants,
   getAmoAuthUrl,
+  getAmoDiscovery,
   getAmoPipelineMapping,
   getAmoPipelines,
   getAmoStages,
@@ -16,11 +17,14 @@ import {
   parseApiError,
   postTenantWhatsappBinding,
   saveAmoPipelineMapping,
+  saveTenantDefaultPipeline,
+  testAmoSync,
   selfCheckTenant,
   STAGE_NAME_TO_KEY,
   testWhatsApp,
   updateTenantSettings,
   type AdminTenant,
+  type AmoDiscoveryResult,
   type AmoPipeline,
   type AmoPipelineMapping,
   type AmoStage,
@@ -158,9 +162,16 @@ const AdminTenants = () => {
   // AmoCRM Pipelines & Stages
   const [amoPipelines, setAmoPipelines] = useState<AmoPipeline[]>([])
   const [amoStages, setAmoStages] = useState<AmoStage[]>([])
+  const [amoCustomFields, setAmoCustomFields] = useState<Array<{ id: number; name: string }>>([])
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>('')
   const [pipelinesLoading, setPipelinesLoading] = useState(false)
   const [stagesLoading, setStagesLoading] = useState(false)
+
+  // AmoCRM Sync Test
+  const [amoTestPhone, setAmoTestPhone] = useState('')
+  const [amoTestText, setAmoTestText] = useState('Текст заметки для проверки передачи')
+  const [amoTestResult, setAmoTestResult] = useState<{ ok: boolean; message: string; data?: unknown } | null>(null)
+  const [amoTestLoading, setAmoTestLoading] = useState(false)
 
   // Track dirty fields to avoid wiping secrets
   const [dirtyFields, setDirtyFields] = useState<Set<string>>(new Set())
@@ -342,24 +353,7 @@ const AdminTenants = () => {
     }
   }, [dirtyFields])
 
-  // Load AmoCRM pipelines
-  const loadPipelines = useCallback(async (tenantId: string | number) => {
-    setPipelinesLoading(true)
-    try {
-      const pipelines = await getAmoPipelines(tenantId)
-      setAmoPipelines(pipelines)
-      if (pipelines.length > 0) {
-        const mainPipeline = pipelines.find(p => p.is_main) || pipelines[0]
-        setSelectedPipelineId(String(mainPipeline.id))
-        // Also load stages for this pipeline
-        await loadStages(tenantId, mainPipeline.id)
-      }
-    } catch (err) {
-      setActionError(getErrorMessage(err))
-    } finally {
-      setPipelinesLoading(false)
-    }
-  }, [])
+
 
   // Load AmoCRM stages for a pipeline
   const loadStages = useCallback(async (tenantId: string | number, pipelineId?: string | number) => {
@@ -373,6 +367,74 @@ const AdminTenants = () => {
       setStagesLoading(false)
     }
   }, [])
+
+  // Discovery: Load pipelines and fields from AmoCRM interactively
+  const handleLoadAmoDiscovery = async () => {
+    if (!activeTenant) return
+    setPipelinesLoading(true)
+    setActionError(null)
+    try {
+      const data = await getAmoDiscovery(activeTenant.id)
+      setAmoPipelines(data.pipelines)
+      setAmoCustomFields(data.custom_fields)
+
+      showToast(`Загружено: ${data.pipelines.length} воронок, ${data.custom_fields.length} полей`)
+
+      // If we have pipelines, select main or first
+      if (data.pipelines.length > 0) {
+        // Try to keep existing choice if valid, else pick main
+        const newSelected = selectedPipelineId || String(data.pipelines.find(p => p.is_main)?.id || data.pipelines[0].id)
+        setSelectedPipelineId(newSelected)
+        await loadStages(activeTenant.id, newSelected)
+      }
+    } catch (err) {
+      setActionError(getErrorMessage(err))
+    } finally {
+      setPipelinesLoading(false)
+    }
+  }
+
+  const handleSaveDefaultPipeline = async () => {
+    if (!activeTenant || !selectedPipelineId) return
+    setActionStatus('loading')
+    try {
+      await saveTenantDefaultPipeline(activeTenant.id, selectedPipelineId)
+      // Update local status to reflect we have a pipeline
+      setAmoStatus(prev => ({ ...prev, pipeline_id: selectedPipelineId }))
+      showToast('Воронка по умолчанию сохранена ✅')
+    } catch (err) {
+      setActionError(getErrorMessage(err))
+    } finally {
+      setActionStatus('idle')
+    }
+  }
+
+  const handleTestAmoSync = async () => {
+    if (!activeTenant) return
+    if (!amoTestPhone) {
+      setActionError('Введите номер телефона')
+      return
+    }
+    setAmoTestLoading(true)
+    setAmoTestResult(null)
+    setActionError(null)
+    try {
+      const res = await testAmoSync(activeTenant.id, {
+        phone: amoTestPhone,
+        text: amoTestText
+      })
+      setAmoTestResult(res)
+      if (res.ok) {
+        showToast('Синк прошёл успешно ✅')
+      } else {
+        setActionError(res.message)
+      }
+    } catch (err) {
+      setActionError(getErrorMessage(err))
+    } finally {
+      setAmoTestLoading(false)
+    }
+  }
 
   // Auto-fill mapping based on stage names
   const handleAutoFillMapping = useCallback(() => {
@@ -1409,9 +1471,9 @@ const AdminTenants = () => {
                             </div>
                           </div>
 
-                          {/* Test WhatsApp Section */}
+                          {/* WhatsApp Test Section */}
                           <div className="admin-settings-block" style={{ marginTop: 24, padding: 16, background: '#f8f9fa', borderRadius: 8 }}>
-                            <div className="admin-subheading">Проверка отправки</div>
+                            <div className="admin-subheading">Проверка WhatsApp (Meta/ChatFlow)</div>
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                               <input
                                 className="admin-input"
@@ -1436,6 +1498,55 @@ const AdminTenants = () => {
                                   <details>
                                     <summary>Подробнее</summary>
                                     <pre style={{ fontSize: 10, marginTop: 5 }}>{waTestResult.details}</pre>
+                                  </details>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* AmoCRM Sync Test Section */}
+                          <div className="admin-settings-block" style={{ marginTop: 16, padding: 16, background: '#fff4e5', borderRadius: 8, border: '1px solid #fed7aa' }}>
+                            <div className="admin-subheading">Проверка синка в AmoCRM</div>
+                            <div className="admin-settings-hint" style={{ marginBottom: 12 }}>
+                              <div>1. Убедитесь, что AmoCRM подключён (вкладка AmoCRM).</div>
+                              <div>2. Убедитесь, что воронка выбрана и маппинг заполнен.</div>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <div style={{ display: 'flex', gap: 12 }}>
+                                <input
+                                  className="admin-input"
+                                  style={{ flex: 1 }}
+                                  placeholder="+7... (телефон для поиска/создания)"
+                                  value={amoTestPhone}
+                                  onChange={e => setAmoTestPhone(e.target.value)}
+                                />
+                              </div>
+                              <div style={{ display: 'flex', gap: 12 }}>
+                                <input
+                                  className="admin-input"
+                                  style={{ flex: 1 }}
+                                  placeholder="Текст тестовой заметки/сообщения"
+                                  value={amoTestText}
+                                  onChange={e => setAmoTestText(e.target.value)}
+                                />
+                                <button
+                                  className="admin-btn admin-btn--accent"
+                                  type="button"
+                                  onClick={handleTestAmoSync}
+                                  disabled={amoTestLoading}
+                                >
+                                  {amoTestLoading ? 'Синк...' : 'Тест синка'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {amoTestResult && (
+                              <div className={`admin-alert ${amoTestResult.ok ? 'admin-alert--success' : 'admin-alert--error'}`} style={{ marginTop: 12 }}>
+                                <strong>{amoTestResult.ok ? 'Успех' : 'Ошибка'}:</strong> {amoTestResult.message}
+                                {!!amoTestResult.data && (
+                                  <details>
+                                    <summary>Данные ответа</summary>
+                                    <pre style={{ fontSize: 10, marginTop: 5 }}>{JSON.stringify(amoTestResult.data, null, 2)}</pre>
                                   </details>
                                 )}
                               </div>
@@ -1552,34 +1663,43 @@ const AdminTenants = () => {
                                 <button
                                   className="admin-btn admin-btn--secondary"
                                   type="button"
-                                  onClick={() => activeTenant && loadPipelines(activeTenant.id)}
+                                  onClick={handleLoadAmoDiscovery}
                                   disabled={pipelinesLoading}
                                 >
-                                  {pipelinesLoading ? 'Загрузка...' : '📥 Загрузить воронки'}
+                                  {pipelinesLoading ? 'Загрузка...' : '🔄 Загрузить из AmoCRM (Discovery)'}
                                 </button>
                               </div>
 
                               {/* Pipeline selector */}
                               {amoPipelines.length > 0 && (
                                 <div className="admin-settings-block">
-                                  <label className="admin-label">Выберите воронку</label>
-                                  <select
-                                    className="admin-input"
-                                    value={selectedPipelineId}
-                                    onChange={(e) => {
-                                      setSelectedPipelineId(e.target.value)
-                                      if (e.target.value && activeTenant) {
-                                        loadStages(activeTenant.id, e.target.value)
-                                      }
-                                    }}
-                                  >
-                                    <option value="">— Выберите воронку —</option>
-                                    {amoPipelines.map(p => (
-                                      <option key={p.id} value={p.id}>
-                                        {p.name} {p.is_main ? '(основная)' : ''}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <label className="admin-label">Основная воронка (куда создавать лиды)</label>
+                                  <div style={{ display: 'flex', gap: 8 }}>
+                                    <select
+                                      className="admin-input"
+                                      value={selectedPipelineId}
+                                      onChange={(e) => {
+                                        setSelectedPipelineId(e.target.value)
+                                        if (e.target.value && activeTenant) {
+                                          loadStages(activeTenant.id, e.target.value)
+                                        }
+                                      }}
+                                    >
+                                      <option value="">— Выберите воронку —</option>
+                                      {amoPipelines.map(p => (
+                                        <option key={p.id} value={p.id}>
+                                          {p.name} {p.is_main ? '(основная)' : ''}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <button
+                                      className="admin-btn admin-btn--secondary"
+                                      onClick={handleSaveDefaultPipeline}
+                                      disabled={actionStatus === 'loading' || !selectedPipelineId}
+                                    >
+                                      Сохранить
+                                    </button>
+                                  </div>
                                 </div>
                               )}
 
@@ -1683,6 +1803,47 @@ const AdminTenants = () => {
                               >
                                 {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить маппинг'}
                               </button>
+                            </div>
+
+                          )}
+
+                          {amoCustomFields.length > 0 && (
+                            <div className="admin-settings-block" style={{ marginTop: 24 }}>
+                              <label className="admin-label">Маппинг полей</label>
+                              <div className="admin-settings-hint" style={{ marginBottom: 12 }}>
+                                (Функционал в разработке: выберите поля AmoCRM для сущностей BuildCRM)
+                              </div>
+                              <table className="admin-mapping-table">
+                                <thead>
+                                  <tr>
+                                    <th>Поле BuildCRM</th>
+                                    <th>Поле AmoCRM (Custom Field)</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr>
+                                    <td>Город</td>
+                                    <td>
+                                      <select className="admin-input admin-input--sm" disabled>
+                                        <option>— Выберите поле —</option>
+                                        {amoCustomFields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                      </select>
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td>Объект (ЖК)</td>
+                                    <td>
+                                      <select className="admin-input admin-input--sm" disabled>
+                                        <option>— Выберите поле —</option>
+                                        {amoCustomFields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                      </select>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                              <div className="admin-settings-hint" style={{ marginTop: 8 }}>
+                                * Сохранение маппинга полей пока не реализовано на бэкенде
+                              </div>
                             </div>
                           )}
 

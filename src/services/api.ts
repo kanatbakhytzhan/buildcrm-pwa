@@ -2156,17 +2156,7 @@ export type AmoStage = {
   is_lost?: boolean  // Lost/rejected
 }
 
-export const getAmoPipelines = async (
-  tenantId: string | number,
-): Promise<AmoPipeline[]> => {
-  const url = fullUrl(`/api/admin/tenants/${tenantId}/amocrm/pipelines`)
-  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
-  if (response.status === 404) return []
-  if (!response.ok) throw await buildError(response)
-  const data = await response.json()
-  return Array.isArray(data) ? (data as AmoPipeline[]) :
-    (data as { pipelines?: AmoPipeline[] })?.pipelines ?? []
-}
+
 
 export const getAmoStages = async (
   tenantId: string | number,
@@ -2319,4 +2309,70 @@ export const selfCheckTenant = async (
   if (!response.ok) throw await buildError(response)
   const data = await response.json()
   return data as SelfCheckResult
+}
+
+/* --- New AmoCRM features (Discovery etc.) --- */
+
+export type AmoDiscoveryResult = {
+  pipelines: AmoPipeline[]
+  custom_fields: Array<{ id: number; name: string; type_id?: number }>
+}
+
+/** GET /api/admin/tenants/{id}/amocrm/discovery */
+export const getAmoDiscovery = async (tenantId: string | number): Promise<AmoDiscoveryResult> => {
+  const data = await request<unknown>(`/api/admin/tenants/${tenantId}/amocrm/discovery`, {
+    method: 'GET',
+    headers: { ...authHeaders() },
+  })
+  // Normalize response
+  const d = data as { pipelines?: AmoPipeline[]; custom_fields?: unknown[] }
+  return {
+    pipelines: Array.isArray(d.pipelines) ? d.pipelines : [],
+    custom_fields: Array.isArray(d.custom_fields)
+      ? (d.custom_fields as Array<{ id: number; name: string; type_id?: number }>)
+      : [],
+  }
+}
+
+/** POST /api/admin/tenants/{id}/amocrm/default-pipeline */
+export const saveTenantDefaultPipeline = async (
+  tenantId: string | number,
+  pipelineId: string | number,
+): Promise<void> => {
+  await request<unknown>(`/api/admin/tenants/${tenantId}/amocrm/default-pipeline`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ pipeline_id: pipelineId }),
+  })
+}
+
+/** POST /api/admin/tenants/{id}/amocrm/test-sync */
+export const testAmoSync = async (
+  tenantId: string | number,
+  payload: { phone: string; text: string },
+): Promise<{ ok: boolean; message: string; data?: unknown }> => {
+  const data = await request<unknown>(`/api/admin/tenants/${tenantId}/amocrm/test-sync`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+  return data as { ok: boolean; message: string; data?: unknown }
+}
+
+// Re-export or define getAmoPipelines for compatibility
+export const getAmoPipelines = async (
+  tenantId: string | number,
+): Promise<AmoPipeline[]> => {
+  try {
+    const d = await getAmoDiscovery(tenantId)
+    return d.pipelines
+  } catch {
+    return []
+  }
 }
