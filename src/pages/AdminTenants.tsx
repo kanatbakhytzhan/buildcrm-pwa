@@ -130,10 +130,10 @@ const AdminTenants = () => {
   const [lastCheck, setLastCheck] = useState<{ status: 'ok' | 'fail'; time: string; raw?: unknown } | null>(null)
 
   // --- Data Loading ---
-  const [waTestOpen, setWaTestOpen] = useState(false)
+
   const [waTestPhone, setWaTestPhone] = useState('')
-  const [waTestMessage, setWaTestMessage] = useState('Тестовое сообщение от BuildCRM')
-  const [waTestLoading, setWaTestLoading] = useState(false)
+  const [waTestMessage] = useState('Тестовое сообщение от BuildCRM')
+  const [waTestStatus, setWaTestStatus] = useState<'idle' | 'loading'>('idle')
   const [waTestResult, setWaTestResult] = useState<{ ok: boolean; message: string; details?: string; status?: number } | null>(null)
 
   // Store original server values for WhatsApp to preserve masked tokens
@@ -566,26 +566,30 @@ const AdminTenants = () => {
 
     try {
       // 1. Prepare Data
-      const tokenToSend = dirtyFields.has('chatflow_token')
-        ? (settings.chatflow_token || undefined) // send undefined if empty to skip, UNLESS explicit clear? User said don't send empty strings.
-        : undefined
+      // Helper to normalize phone
+      const cleanPhone = (p: string | null | undefined) => p?.replace(/[^\d+]/g, '') || null
 
-      // If user typed something then deleted it -> settings.chatflow_token is "".
-      // validation:
-      if (settings.chatflow_token === '') {
-        // User wants to clear? Or just mistake?
-        // For now, skip sending empty token.
-        // If user wants to clear -> we need explicit button or heuristic.
-      }
+      const tokenToSend = dirtyFields.has('chatflow_token') && settings.chatflow_token && settings.chatflow_token.trim().length > 0
+        ? settings.chatflow_token.trim()
+        : undefined
 
       // 2. If 'chatflow' source -> POST binding
       if (settings.whatsapp_source === 'chatflow') {
-        const bindingPayload: Record<string, unknown> = {
-          instance_id: settings.chatflow_instance_id || null, // null if empty
+        const bindingPayload: {
+          token?: string | null
+          instance_id?: string | null
+          phone_number?: string | null
+          active?: boolean
+        } = {
+          instance_id: settings.chatflow_instance_id || null,
           phone_number: settings.chatflow_phone_number || null,
           active: settings.chatflow_active,
         }
-        if (tokenToSend && tokenToSend.trim().length > 0) {
+
+        // Only include token if user provided a new one
+        // If undefined, it won't overwrite backend (assuming backend handles patch-like behavior or existing value retention)
+        // If user wants to clear types "", we technically skip sending it to avoid accidental wipe
+        if (tokenToSend) {
           bindingPayload.token = tokenToSend
         }
 
@@ -599,47 +603,79 @@ const AdminTenants = () => {
         chatflow_phone_number: settings.chatflow_phone_number || null,
         chatflow_active: settings.chatflow_active,
       }
-      if (tokenToSend && tokenToSend.trim().length > 0) {
+      if (tokenToSend) {
         settingsPayload.chatflow_token = tokenToSend
       }
 
-      await updateTenantSettings(activeTenant.id, settingsPayload).catch(() => null) // ignore error here if binding worked
+      // Ignore error here if binding worked, as this is secondary
+      await updateTenantSettings(activeTenant.id, settingsPayload).catch(() => null)
 
       // 4. VERIFICATION GET
       // Fetch binding and settings to confirm
-      const [verifiedSettings, verifiedBinding] = await Promise.all([
+      // We look at the list of Whatsapps to find the ChatFlow one
+      const [verifiedSettings, verifiedBindings] = await Promise.all([
         getTenantSettings(activeTenant.id),
-        getTenantWhatsapps(activeTenant.id).then(list => list[0] || null)
+        getTenantWhatsapps(activeTenant.id)
       ])
+      const verifiedBinding = verifiedBindings && verifiedBindings.length > 0 ? verifiedBindings[0] : null
 
-      // 5. Compare
-      // Check if instance ID matches
-      const instanceMatch = verifiedBinding?.instance_id === (settings.chatflow_instance_id || verifiedBinding?.instance_id || '')
+      // 5. Normalization & Comparison
+      const sentInstance = (settings.chatflow_instance_id || '').trim()
+      const gotInstance = (verifiedBinding?.instance_id || verifiedSettings.chatflow_instance_id || '').trim()
 
-      if (instanceMatch) {
-        // Reload fully
+      const sentPhone = cleanPhone(settings.chatflow_phone_number)
+      const gotPhone = cleanPhone(verifiedBinding?.phone_number || verifiedSettings.chatflow_phone_number)
+
+      const sentActive = settings.chatflow_active !== false
+      const gotActive = (verifiedBinding?.active ?? verifiedSettings.chatflow_active) !== false
+
+      // Token Check:
+      // If we sent a token, we expect backend to have it (masked or not).
+      // We do NOT compare string equality because backend masks it.
+      // We just check that binding EXISTS and (if we sent one) it has a token.
+      const sentToken = !!tokenToSend
+      const gotToken = !!(verifiedBinding?.token || verifiedSettings.chatflow_token || verifiedSettings.chatflow_token_masked)
+
+      const instanceMatch = sentInstance === gotInstance
+      const phoneMatch = sentPhone === gotPhone
+      const activeMatch = sentActive === gotActive
+      const tokenMatch = sentToken ? gotToken : true // If we didn't send token, we assume existing is fine/unchanged
+
+      if (instanceMatch && phoneMatch && activeMatch && tokenMatch) {
+        // SUCCESS
+        // Merge verified data back into local state
         if (verifiedSettings) {
-          // merge
-          if (verifiedBinding) {
-            verifiedSettings.chatflow_token = verifiedBinding.token || verifiedSettings.chatflow_token
-            verifiedSettings.chatflow_instance_id = verifiedBinding.instance_id || verifiedSettings.chatflow_instance_id
-            verifiedSettings.chatflow_phone_number = verifiedBinding.phone_number || verifiedSettings.chatflow_phone_number
-            verifiedSettings.chatflow_active = verifiedBinding.active
-          }
-          setSettings(safeSettings(verifiedSettings))
-          setServerWhatsApp({
-            token: verifiedSettings.chatflow_token,
-            instance_id: verifiedSettings.chatflow_instance_id,
-            phone_number: verifiedSettings.chatflow_phone_number,
-            active: verifiedSettings.chatflow_active,
-            binding_exists: !!(verifiedBinding?.token),
-          })
+          // Prefer binding data if available
+          verifiedSettings.chatflow_instance_id = verifiedBinding?.instance_id || verifiedSettings.chatflow_instance_id
+          verifiedSettings.chatflow_phone_number = verifiedBinding?.phone_number || verifiedSettings.chatflow_phone_number
+          verifiedSettings.chatflow_active = verifiedBinding?.active ?? verifiedSettings.chatflow_active
+          // Don't overwrite local token with masked one if we just typed it ? 
+          // Actually better to keep what user typed or clear it? 
+          // Standard: keep what verifiedSettings has (masked) so user sees it's saved.
+          // But if we just typed 'abc', UI turns into '***'? That's fine.
         }
 
+        setSettings(safeSettings(verifiedSettings))
+        setServerWhatsApp({
+          token: verifiedSettings.chatflow_token,
+          instance_id: verifiedSettings.chatflow_instance_id,
+          phone_number: verifiedSettings.chatflow_phone_number,
+          active: verifiedSettings.chatflow_active,
+          binding_exists: !!(verifiedBinding?.token || verifiedSettings.chatflow_token_masked),
+        })
+
         setDirtyFields(new Set())
-        showToast('Сохранено и проверено ✅')
+        setLastCheck({ status: 'ok', time: new Date().toLocaleTimeString() })
+        showToast('WhatsApp настройки обновлены ✅')
       } else {
-        throw new Error('Данные отправлены, но сервер вернул старое значение. Попробуйте еще раз.')
+        // FAILURE
+        console.error('[AdminTenants] WA Verify Failed', {
+          sent: { instance: sentInstance, phone: sentPhone, active: sentActive, tokenSent: sentToken },
+          got: { instance: gotInstance, phone: gotPhone, active: gotActive, tokenGot: gotToken }
+        })
+
+        setLastCheck({ status: 'fail', time: new Date().toLocaleTimeString(), raw: { verifiedSettings, verifiedBinding } })
+        throw new Error('Проверка не прошла: данные на сервере отличаются от отправленных.')
       }
 
       await loadTenants()
@@ -660,7 +696,7 @@ const AdminTenants = () => {
       return
     }
 
-    setWaTestLoading(true)
+    setWaTestStatus('loading')
     setWaTestResult(null)
 
     const result = await testWhatsApp(activeTenant.id, {
@@ -669,7 +705,7 @@ const AdminTenants = () => {
     })
 
     setWaTestResult(result)
-    setWaTestLoading(false)
+    setWaTestStatus('idle')
   }
 
   const handleSaveAmoDomain = async () => {
@@ -1258,10 +1294,18 @@ const AdminTenants = () => {
                   ) : (
                     <>
                       {/* Status based on server binding info */}
-                      <div className={`admin-status-box ${serverWhatsApp.binding_exists || isBound ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}>
-                        {serverWhatsApp.binding_exists || isBound
-                          ? '✅ Привязано — бот готов отвечать'
-                          : '⚠️ Не привязано — бот не сможет отвечать'}
+                      <div className={`admin-status-box ${serverWhatsApp.binding_exists || isBound ? 'admin-status-box--ok' : 'admin-status-box--warn'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>
+                          {serverWhatsApp.binding_exists || isBound
+                            ? '✅ Привязано — бот готов отвечать'
+                            : '⚠️ Не привязано — бот не сможет отвечать'}
+                        </span>
+                        {/* Last check info in status box if available */}
+                        {lastCheck && settings.whatsapp_source === 'chatflow' && (
+                          <span style={{ fontSize: '0.85em', opacity: 0.8 }}>
+                            Check: {lastCheck.status.toUpperCase()} {lastCheck.time}
+                          </span>
+                        )}
                       </div>
 
                       {/* Show masked token info if we have it from server */}
@@ -1334,7 +1378,10 @@ const AdminTenants = () => {
                               <input
                                 type="checkbox"
                                 checked={settings.chatflow_active !== false}
-                                onChange={(e) => setSettings({ ...settings, chatflow_active: e.target.checked })}
+                                onChange={(e) => {
+                                  setSettings({ ...settings, chatflow_active: e.target.checked })
+                                  setDirtyFields(prev => new Set(prev).add('chatflow_active'))
+                                }}
                               />
                               <span className="admin-switch-track">
                                 <span className="admin-switch-thumb" />
@@ -1342,6 +1389,39 @@ const AdminTenants = () => {
                             </label>
                           </div>
                         </div>
+                      </div>
+
+                      {/* Test WhatsApp Section */}
+                      <div className="admin-settings-block" style={{ marginTop: 24, padding: 16, background: '#f8f9fa', borderRadius: 8 }}>
+                        <div className="admin-subheading">Проверка отправки</div>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                          <input
+                            className="admin-input"
+                            style={{ flex: 1 }}
+                            placeholder="+7..."
+                            value={waTestPhone}
+                            onChange={e => setWaTestPhone(e.target.value)}
+                          />
+                          <button
+                            className="admin-btn admin-btn--secondary"
+                            type="button"
+                            onClick={handleTestWhatsApp}
+                            disabled={waTestStatus === 'loading'}
+                          >
+                            {waTestStatus === 'loading' ? 'Отправка...' : 'Отправить тест'}
+                          </button>
+                        </div>
+                        {waTestResult && (
+                          <div className={`admin-alert ${waTestResult.ok ? 'admin-alert--success' : 'admin-alert--error'}`} style={{ marginTop: 12 }}>
+                            {waTestResult.message}
+                            {waTestResult.details && (
+                              <details>
+                                <summary>Подробнее</summary>
+                                <pre style={{ fontSize: 10, marginTop: 5 }}>{waTestResult.details}</pre>
+                              </details>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </>
                   )}
@@ -1358,80 +1438,7 @@ const AdminTenants = () => {
                       {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить привязку'}
                     </button>
 
-                    {(serverWhatsApp.binding_exists || isBound) && (
-                      <button
-                        className="admin-btn admin-btn--secondary"
-                        type="button"
-                        onClick={() => setWaTestOpen(true)}
-                      >
-                        📱 Проверить WhatsApp
-                      </button>
-                    )}
                   </div>
-
-                  {/* WhatsApp Test Panel */}
-                  {waTestOpen && (
-                    <div className="admin-test-panel" style={{ marginTop: 16 }}>
-                      <div className="admin-divider" />
-                      <h4 className="admin-subtitle">Тест отправки сообщения</h4>
-
-                      <div className="admin-form-grid">
-                        <div className="admin-settings-block">
-                          <label className="admin-label">Номер телефона (получатель)</label>
-                          <input
-                            className="admin-input"
-                            type="text"
-                            value={waTestPhone}
-                            onChange={(e) => setWaTestPhone(e.target.value)}
-                            placeholder="+77001234567"
-                          />
-                        </div>
-
-                        <div className="admin-settings-block">
-                          <label className="admin-label">Текст сообщения</label>
-                          <input
-                            className="admin-input"
-                            type="text"
-                            value={waTestMessage}
-                            onChange={(e) => setWaTestMessage(e.target.value)}
-                            placeholder="Тестовое сообщение"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="admin-btn-group" style={{ marginTop: 12 }}>
-                        <button
-                          className="admin-btn admin-btn--accent"
-                          type="button"
-                          onClick={handleTestWhatsApp}
-                          disabled={waTestLoading}
-                        >
-                          {waTestLoading ? 'Отправка...' : '🚀 Отправить тест'}
-                        </button>
-                        <button
-                          className="admin-btn admin-btn--ghost"
-                          type="button"
-                          onClick={() => {
-                            setWaTestOpen(false)
-                            setWaTestResult(null)
-                          }}
-                        >
-                          Закрыть
-                        </button>
-                      </div>
-
-                      {waTestResult && (
-                        <div className={`admin-alert ${waTestResult.ok ? 'admin-alert--success' : 'admin-alert--error'}`} style={{ marginTop: 12 }}>
-                          <strong>{waTestResult.ok ? '✅' : '❌'} {waTestResult.message}</strong>
-                          {waTestResult.details && (
-                            <pre style={{ marginTop: 8, fontSize: 11, overflow: 'auto', maxHeight: 150 }}>
-                              {waTestResult.details}
-                            </pre>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1673,7 +1680,8 @@ const AdminTenants = () => {
             </div>
           </div>
         </div>
-      )}
+      )
+      }
 
       {/* Users Modal */}
       {
