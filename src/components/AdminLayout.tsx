@@ -15,60 +15,60 @@ const AdminLayout = () => {
   return (
     <div className="admin-layout">
       <aside className="admin-sidebar">
-        <div className="admin-sidebar-header">
-          <div className="admin-sidebar-logo">
-            <span className="admin-logo-text">BuildCRM</span>
-            <span className="admin-logo-badge">Admin</span>
-          </div>
+        <div style={{ marginBottom: 32 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: 'white', margin: 0 }}>BuildCRM</h2>
+          <span style={{ fontSize: 12, opacity: 0.5 }}>Admin Console</span>
         </div>
 
-        <nav className="admin-sidebar-nav">
+        <nav className="admin-sidebar-menu">
           <NavLink
             to="/admin/tenants"
-            className={({ isActive }) => `admin-nav-link ${isActive ? 'admin-nav-link--active' : ''}`}
+            className={({ isActive }) => `admin-menu-item ${isActive ? 'active' : ''}`}
           >
-            <span className="admin-nav-icon">🏢</span>
-            <span className="admin-nav-text">Клиенты</span>
+            <span>🏢</span>
+            <span>Клиенты</span>
           </NavLink>
           <NavLink
             to="/admin/users"
-            className={({ isActive }) => `admin-nav-link ${isActive ? 'admin-nav-link--active' : ''}`}
+            className={({ isActive }) => `admin-menu-item ${isActive ? 'active' : ''}`}
           >
-            <span className="admin-nav-icon">👥</span>
-            <span className="admin-nav-text">Пользователи</span>
+            <span>👥</span>
+            <span>Пользователи</span>
           </NavLink>
           <NavLink
             to="/admin/check"
-            className={({ isActive }) => `admin-nav-link ${isActive ? 'admin-nav-link--active' : ''}`}
+            className={({ isActive }) => `admin-menu-item ${isActive ? 'active' : ''}`}
           >
-            <span className="admin-nav-icon">🔧</span>
-            <span className="admin-nav-text">Диагностика</span>
+            <span>🔧</span>
+            <span>Диагностика</span>
           </NavLink>
           {CRM_V2_ENABLED && (
             <NavLink
               to="/v2/leads-table"
-              className={({ isActive }) => `admin-nav-link ${isActive ? 'admin-nav-link--active' : ''}`}
+              className={({ isActive }) => `admin-menu-item ${isActive ? 'active' : ''}`}
             >
-              <span className="admin-nav-icon">📋</span>
-              <span className="admin-nav-text">CRM Лиды</span>
+              <span>📋</span>
+              <span>CRM Лиды</span>
             </NavLink>
           )}
         </nav>
 
-        <div className="admin-sidebar-footer">
-          <div className="admin-user-info">
-            <span className="admin-user-role">{isAdmin ? 'Administrator' : userRole}</span>
+        <div style={{ marginTop: 'auto', paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ fontSize: 14, color: 'white', marginBottom: 8 }}>
+            {isAdmin ? 'Administrator' : userRole}
           </div>
-          <button className="admin-logout-btn" type="button" onClick={handleLogout}>
+          <button
+            type="button"
+            onClick={handleLogout}
+            style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: 0, fontSize: 13 }}
+          >
             Выйти
           </button>
         </div>
       </aside>
 
       <main className="admin-main">
-        <div className="admin-container">
-          <Outlet />
-        </div>
+        <Outlet />
       </main>
     </div>
   )

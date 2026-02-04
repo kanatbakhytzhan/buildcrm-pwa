@@ -163,11 +163,11 @@ const AdminUsers = () => {
   }, [createOpen, resetOpen, resetResultOpen])
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-content-wrapper">
+      <div className="admin-header">
         <div>
-          <h1 className="admin-page-title">Пользователи</h1>
-          <p className="admin-page-subtitle">
+          <h1 className="admin-title">Пользователи</h1>
+          <p style={{ color: 'var(--admin-text-secondary)', marginTop: 4 }}>
             {status === 'loading' ? 'Загрузка...' : `Всего: ${users.length}`}
           </p>
         </div>
@@ -181,7 +181,7 @@ const AdminUsers = () => {
             onClick={loadUsers}
             disabled={status === 'loading'}
           >
-            {status === 'loading' ? 'Загрузка...' : 'Обновить'}
+            {status === 'loading' ? 'Загрузка...' : '🔄 Обновить'}
           </button>
         </div>
       </div>
@@ -215,7 +215,7 @@ const AdminUsers = () => {
       )}
 
       {!error && filteredUsers.length > 0 && (
-        <div className="admin-table-wrap">
+        <div className="admin-table-container">
           <table className="admin-table">
             <thead>
               <tr>
@@ -262,7 +262,7 @@ const AdminUsers = () => {
 
       {/* Create User Modal */}
       {createOpen && (
-        <div className="admin-modal-backdrop" onClick={closeCreate}>
+        <div className="admin-modal-overlay" onClick={closeCreate}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h2 className="admin-modal-title">Создать пользователя</h2>
@@ -321,7 +321,7 @@ const AdminUsers = () => {
 
       {/* Reset Password Confirmation Modal */}
       {resetOpen && activeUser && (
-        <div className="admin-modal-backdrop" onClick={closeReset}>
+        <div className="admin-modal-overlay" onClick={closeReset}>
           <div className="admin-modal admin-modal--sm" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h2 className="admin-modal-title">Сбросить пароль</h2>
@@ -352,7 +352,7 @@ const AdminUsers = () => {
 
       {/* Temp Password Result Modal */}
       {resetResultOpen && tempPassword && (
-        <div className="admin-modal-backdrop" onClick={closeResetResult}>
+        <div className="admin-modal-overlay" onClick={closeResetResult}>
           <div className="admin-modal admin-modal--sm" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h2 className="admin-modal-title">Временный пароль</h2>
@@ -370,7 +370,7 @@ const AdminUsers = () => {
                   className="admin-btn admin-btn--secondary"
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(tempPassword).catch(() => {})
+                    navigator.clipboard.writeText(tempPassword).catch(() => { })
                     showToast('Пароль скопирован')
                   }}
                 >

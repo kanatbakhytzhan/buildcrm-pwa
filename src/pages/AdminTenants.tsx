@@ -903,11 +903,11 @@ const AdminTenants = () => {
 
   // --- Render ---
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
+    <div className="admin-content-wrapper">
+      <div className="admin-header">
         <div>
-          <h1 className="admin-page-title">Клиенты</h1>
-          <p className="admin-page-subtitle">Управление tenants</p>
+          <h1 className="admin-title">Клиенты</h1>
+          <p style={{ color: 'var(--admin-text-secondary)', marginTop: 4 }}>Управление тенантами и глобальными настройками</p>
         </div>
         <button
           className="admin-btn admin-btn--primary"
@@ -915,778 +915,798 @@ const AdminTenants = () => {
           onClick={loadTenants}
           disabled={status === 'loading'}
         >
-          {status === 'loading' ? 'Загрузка...' : 'Обновить'}
+          {status === 'loading' ? 'Загрузка...' : '🔄 Обновить'}
         </button>
       </div>
 
       {error && <div className="admin-alert admin-alert--error">{error}</div>}
 
-      {status === 'loading' && <div className="admin-loading">Загрузка клиентов...</div>}
+      {
+        status === 'loading' && (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--admin-text-secondary)' }}>
+            Загрузка...
+          </div>
+        )
+      }
 
-      {!error && status !== 'loading' && tenants.length === 0 && (
-        <div className="admin-empty">Клиентов пока нет</div>
-      )}
+      {
+        !error && status !== 'loading' && tenants.length === 0 && (
+          <div className="admin-card" style={{ textAlign: 'center', color: 'var(--admin-text-secondary)' }}>
+            Клиентов пока нет
+          </div>
+        )
+      }
 
-      {!error && tenants.length > 0 && (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Tenant</th>
-                <th>Active</th>
-                <th>AI</th>
-                <th>WhatsApp</th>
-                <th>WA Linked</th>
-                <th>AmoCRM</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tenants.map((t) => (
-                <tr key={t.id}>
-                  <td className="admin-table-name">{t.name}</td>
-                  <td>
-                    <span className={`admin-badge ${t.is_active ? 'admin-badge--ok' : 'admin-badge--off'}`}>
-                      {t.is_active ? 'Yes' : 'No'}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`admin-badge ${t.ai_enabled !== false ? 'admin-badge--ok' : 'admin-badge--off'}`}>
-                      {t.ai_enabled !== false ? 'ON' : 'OFF'}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="admin-badge admin-badge--neutral">
-                      {(t as Record<string, unknown>).whatsapp_source === 'amomarket' ? 'AmoCRM' : 'ChatFlow'}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`admin-badge ${t.token || t.instance_id ? 'admin-badge--ok' : 'admin-badge--warn'}`}>
-                      {t.token || t.instance_id ? 'Yes' : 'No'}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={`admin-badge ${(t as Record<string, unknown>).amocrm_connected ? 'admin-badge--ok' : 'admin-badge--neutral'}`}
-                    >
-                      {(t as Record<string, unknown>).amocrm_connected ? 'Yes' : '—'}
-                    </span>
-                  </td>
-                  <td className="admin-table-actions">
-                    <button className="admin-btn admin-btn--sm" type="button" onClick={() => openEdit(t)}>
-                      Настроить
-                    </button>
-                    <button
-                      className="admin-btn admin-btn--sm admin-btn--ghost"
-                      type="button"
-                      onClick={() => openUsers(t)}
-                    >
-                      Юзеры
-                    </button>
-                    <button
-                      className="admin-btn admin-btn--sm admin-btn--accent"
-                      type="button"
-                      onClick={() => openCheck(t)}
-                    >
-                      Проверить
-                    </button>
-                  </td>
+      {
+        !error && tenants.length > 0 && (
+          <div className="admin-table-container">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Tenant</th>
+                  <th>Active</th>
+                  <th>AI Status</th>
+                  <th>WhatsApp</th>
+                  <th>WA Linked</th>
+                  <th>AmoCRM</th>
+                  <th style={{ width: 280 }}>Действия</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {tenants.map((t) => (
+                  <tr key={t.id}>
+                    <td className="admin-table-name">{t.name}</td>
+                    <td>
+                      <span className={`admin-badge ${t.is_active ? 'admin-badge--ok' : 'admin-badge--off'}`}>
+                        {t.is_active ? 'Yes' : 'No'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`admin-badge ${t.ai_enabled !== false ? 'admin-badge--ok' : 'admin-badge--off'}`}>
+                        {t.ai_enabled !== false ? 'ON' : 'OFF'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="admin-badge admin-badge--neutral">
+                        {(t as Record<string, unknown>).whatsapp_source === 'amomarket' ? 'AmoCRM' : 'ChatFlow'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`admin-badge ${t.token || t.instance_id ? 'admin-badge--ok' : 'admin-badge--warn'}`}>
+                        {t.token || t.instance_id ? 'Yes' : 'No'}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className={`admin-badge ${(t as Record<string, unknown>).amocrm_connected ? 'admin-badge--ok' : 'admin-badge--neutral'}`}
+                      >
+                        {(t as Record<string, unknown>).amocrm_connected ? 'Yes' : '—'}
+                      </span>
+                    </td>
+                    <td className="admin-table-actions">
+                      <button className="admin-btn admin-btn--sm" type="button" onClick={() => openEdit(t)}>
+                        Настроить
+                      </button>
+                      <button
+                        className="admin-btn admin-btn--sm admin-btn--ghost"
+                        type="button"
+                        onClick={() => openUsers(t)}
+                      >
+                        Юзеры
+                      </button>
+                      <button
+                        className="admin-btn admin-btn--sm admin-btn--accent"
+                        type="button"
+                        onClick={() => openCheck(t)}
+                      >
+                        Проверить
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
 
       {/* Toast */}
       {toast && <div className="admin-toast">{toast}</div>}
 
       {/* Settings Modal */}
-      {/* Settings Modal - Centered and Large */}
-      {editOpen && activeTenant && (
-        <div className="admin-modal-overlay" onClick={closeEdit}>
-          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h2 className="admin-modal-title">Настройки: {activeTenant.name}</h2>
-              <button className="admin-modal-close" type="button" onClick={closeEdit}>×</button>
-            </div>
-
-            <div className="admin-modal-content">
-              {/* Error Banner */}
-              {settingsError && (
-                <div className="admin-alert admin-alert--error">
-                  <strong>Ошибка: </strong>
-                  {settingsError}
+      {/* Settings Modal - Wide Desktop */}
+      {
+        editOpen && activeTenant && (
+          <div className="admin-modal-overlay" onClick={closeEdit}>
+            <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
+                <h2 className="admin-modal-title">Настройки: {activeTenant.name}</h2>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  {lastLoadedAt && settingsStatus === 'ready' && (
+                    <span style={{ fontSize: 12, color: 'var(--admin-text-secondary)' }}>
+                      Обновлено: {lastLoadedAt.toLocaleTimeString()}
+                    </span>
+                  )}
+                  <button className="admin-modal-close" type="button" onClick={closeEdit}>×</button>
                 </div>
-              )}
-
-              <div className="admin-tabs">
-                <button
-                  type="button"
-                  className={`admin-tab ${activeTab === 'ai' ? 'admin-tab--active' : ''}`}
-                  onClick={() => setActiveTab('ai')}
-                >
-                  AI Настройки
-                </button>
-                <button
-                  type="button"
-                  className={`admin-tab ${activeTab === 'whatsapp' ? 'admin-tab--active' : ''}`}
-                  onClick={() => setActiveTab('whatsapp')}
-                >
-                  WhatsApp
-                </button>
-                <button
-                  type="button"
-                  className={`admin-tab ${activeTab === 'amocrm' ? 'admin-tab--active' : ''}`}
-                  onClick={() => setActiveTab('amocrm')}
-                >
-                  AmoCRM
-                </button>
               </div>
-              <div className="admin-tabs-actions">
-                {lastLoadedAt && settingsStatus === 'ready' && (
-                  <span className="admin-loaded-at">
-                    Загружено: {lastLoadedAt.toLocaleTimeString('ru-RU')}
-                  </span>
+
+              <div className="admin-modal-content">
+                {/* Error Banner */}
+                {settingsError && (
+                  <div className="admin-alert admin-alert--error">
+                    <strong>Ошибка: </strong> {settingsError}
+                  </div>
                 )}
-                <button
-                  type="button"
-                  className="admin-btn admin-btn--ghost admin-btn--sm"
-                  onClick={() => activeTenant && loadSettings(activeTenant.id)}
-                  disabled={settingsStatus === 'loading'}
-                >
-                  🔄 Обновить
-                </button>
-              </div>
-            </div>
 
-            <div className="admin-modal-body">
-              {/* LOADING STATE */}
-              {settingsStatus === 'loading' && (
-                <div className="admin-loading-panel">
-                  <div className="admin-spinner" />
-                  <p>Загрузка настроек...</p>
+                <div className="admin-tabs">
+                  <div
+                    className={`admin-tab ${activeTab === 'ai' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('ai')}
+                  >
+                    AI Настройки
+                  </div>
+                  <div
+                    className={`admin-tab ${activeTab === 'whatsapp' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('whatsapp')}
+                  >
+                    WhatsApp
+                  </div>
+                  <div
+                    className={`admin-tab ${activeTab === 'amocrm' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('amocrm')}
+                  >
+                    AmoCRM
+                  </div>
                 </div>
-              )}
 
-              {/* ERROR STATE */}
-              {settingsStatus === 'error' && (
-                <div className="admin-error-panel admin-error-panel--detailed">
-                  <div className="admin-error-icon">⚠️</div>
-                  <h3>Ошибка загрузки настроек</h3>
+                <div className="admin-modal-body">
+                  <div className="admin-tabs-actions">
+                    {lastLoadedAt && settingsStatus === 'ready' && (
+                      <span className="admin-loaded-at">
+                        Загружено: {lastLoadedAt.toLocaleTimeString('ru-RU')}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--ghost admin-btn--sm"
+                      onClick={() => activeTenant && loadSettings(activeTenant.id)}
+                      disabled={settingsStatus === 'loading'}
+                    >
+                      🔄 Обновить
+                    </button>
+                  </div>
+                </div>
 
-                  {/* Main error message */}
-                  <p className="admin-error-message">{settingsError || 'Не удалось загрузить настройки'}</p>
-
-                  {/* Detailed diagnostics */}
-                  {settingsErrorDetail && (
-                    <div className="admin-error-diagnostics">
-                      <div className="admin-error-diagnostics-title">🔧 Диагностика:</div>
-                      <div className="admin-error-diagnostics-grid">
-                        {settingsErrorDetail.status && (
-                          <div className="admin-diag-row">
-                            <span className="admin-diag-label">HTTP Status:</span>
-                            <span className="admin-diag-value admin-diag-value--code">{settingsErrorDetail.status}</span>
-                          </div>
-                        )}
-                        {settingsErrorDetail.url && (
-                          <div className="admin-diag-row">
-                            <span className="admin-diag-label">URL:</span>
-                            <span className="admin-diag-value admin-diag-value--mono">{settingsErrorDetail.url}</span>
-                          </div>
-                        )}
-                        {settingsErrorDetail.detail && (
-                          <div className="admin-diag-row">
-                            <span className="admin-diag-label">Backend Detail:</span>
-                            <span className="admin-diag-value">{settingsErrorDetail.detail}</span>
-                          </div>
-                        )}
-                        <div className="admin-diag-row">
-                          <span className="admin-diag-label">Auth Header:</span>
-                          <span className={`admin-diag-value ${settingsErrorDetail.hasAuthHeader ? 'admin-diag-value--ok' : 'admin-diag-value--warn'}`}>
-                            {settingsErrorDetail.hasAuthHeader ? '✅ Присутствует' : '❌ Отсутствует'}
-                          </span>
-                        </div>
-                        {settingsErrorDetail.tenantId && (
-                          <div className="admin-diag-row">
-                            <span className="admin-diag-label">Tenant ID:</span>
-                            <span className="admin-diag-value">{settingsErrorDetail.tenantId}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Response body preview */}
-                      {settingsErrorDetail.responseBody && (
-                        <div className="admin-error-response">
-                          <div className="admin-diag-label">Response (первые 500 символов):</div>
-                          <pre className="admin-error-response-body">{settingsErrorDetail.responseBody}</pre>
-                        </div>
-                      )}
+                <div className="admin-modal-body">
+                  {/* LOADING STATE */}
+                  {settingsStatus === 'loading' && (
+                    <div className="admin-loading-panel">
+                      <div className="admin-spinner" />
+                      <p>Загрузка настроек...</p>
                     </div>
                   )}
 
-                  <div className="admin-error-actions">
-                    <button className="admin-btn admin-btn--primary" type="button" onClick={handleRetrySettings}>
-                      Повторить
-                    </button>
-                    {settingsErrorDetail && (
-                      <button
-                        className="admin-btn admin-btn--secondary"
-                        type="button"
-                        onClick={() => {
-                          const diag = {
-                            url: settingsErrorDetail.url,
-                            status: settingsErrorDetail.status,
-                            detail: settingsErrorDetail.detail,
-                            responseBody: settingsErrorDetail.responseBody,
-                            hasAuthHeader: settingsErrorDetail.hasAuthHeader,
-                            tenantId: settingsErrorDetail.tenantId,
-                            timestamp: new Date().toISOString(),
-                          }
-                          navigator.clipboard.writeText(JSON.stringify(diag, null, 2))
-                          showToast('Диагностика скопирована')
-                        }}
-                      >
-                        📋 Скопировать диагностику
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
+                  {/* ERROR STATE */}
+                  {settingsStatus === 'error' && (
+                    <div className="admin-error-panel admin-error-panel--detailed">
+                      <div className="admin-error-icon">⚠️</div>
+                      <h3>Ошибка загрузки настроек</h3>
 
-              {/* READY STATE - AI Tab */}
-              {settingsStatus === 'ready' && activeTab === 'ai' && (
-                <div className="admin-settings-section">
-                  <div className="admin-settings-block">
-                    <div className="admin-settings-row">
-                      <div className="admin-settings-info">
-                        <div className="admin-settings-label">AI-менеджер (глобально)</div>
-                        <div className="admin-settings-hint">
-                          Когда выключено — бот не отвечает, но лиды сохраняются.
-                        </div>
-                      </div>
-                      <label className="admin-switch">
-                        <input
-                          type="checkbox"
-                          checked={settings.ai_enabled !== false}
-                          onChange={(e) => setSettings({ ...settings, ai_enabled: e.target.checked })}
-                        />
-                        <span className="admin-switch-track">
-                          <span className="admin-switch-thumb" />
-                        </span>
-                      </label>
-                    </div>
-                  </div>
+                      {/* Main error message */}
+                      <p className="admin-error-message">{settingsError || 'Не удалось загрузить настройки'}</p>
 
-                  <div className="admin-settings-block">
-                    <label className="admin-label">AI инструкция (prompt)</label>
-                    <div className="admin-settings-hint" style={{ marginBottom: 8 }}>
-                      Укажите контекст: что продаёте, как общаться, какую информацию собирать.
-                      <div className="admin-field-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <label className="admin-label" style={{ margin: 0 }}>System AI Prompt</label>
-                        <button
-                          type="button"
-                          className="admin-btn-link admin-btn-link--danger"
-                          onClick={handleClearAiPrompt}
-                          style={{ fontSize: 12, textDecoration: 'underline', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
-                        >
-                          Очистить prompt
-                        </button>
-                      </div>
-                      <textarea
-                        className="admin-input admin-input--textarea"
-                        value={settings.ai_prompt ?? ''}
-                        onChange={(e) => {
-                          const val = e.target.value
-                          setSettings(p => ({ ...p, ai_prompt: val }))
-                          setDirtyFields(d => new Set(d).add('ai_prompt'))
-                        }}
-                        placeholder="Ты — полезный ассистент..."
-                        rows={8}
-                      />
-                      <div className="admin-settings-hint" style={{ marginTop: 4 }}>
-                        {!settings.ai_prompt && '⚠️ Prompt пустой — AI будет отвечать дефолтными фразами.'}
-                        {settings.ai_prompt && `Длина: ${settings.ai_prompt.length} символов`}
-                      </div>
-                      <div className="admin-char-counter">
-                        {(settings.ai_prompt ?? '').length} символов
-                      </div>
-                    </div>
+                      {/* Detailed diagnostics */}
+                      {settingsErrorDetail && (
+                        <div className="admin-error-diagnostics">
+                          <div className="admin-error-diagnostics-title">🔧 Диагностика:</div>
+                          <div className="admin-error-diagnostics-grid">
+                            {settingsErrorDetail?.status && (
+                              <div className="admin-diag-row">
+                                <span className="admin-diag-label">HTTP Status:</span>
+                                <span className="admin-diag-value admin-diag-value--code">{settingsErrorDetail?.status}</span>
+                              </div>
+                            )}
+                            {settingsErrorDetail?.url && (
+                              <div className="admin-diag-row">
+                                <span className="admin-diag-label">URL:</span>
+                                <span className="admin-diag-value admin-diag-value--mono">{settingsErrorDetail?.url}</span>
+                              </div>
+                            )}
+                            {settingsErrorDetail?.detail && (
+                              <div className="admin-diag-row">
+                                <span className="admin-diag-label">Backend Detail:</span>
+                                <span className="admin-diag-value">{settingsErrorDetail.detail}</span>
+                              </div>
+                            )}
+                            <div className="admin-diag-row">
+                              <span className="admin-diag-label">Auth Header:</span>
+                              <span className={`admin-diag-value ${settingsErrorDetail.hasAuthHeader ? 'admin-diag-value--ok' : 'admin-diag-value--warn'}`}>
+                                {settingsErrorDetail.hasAuthHeader ? '✅ Присутствует' : '❌ Отсутствует'}
+                              </span>
+                            </div>
+                            {settingsErrorDetail.tenantId && (
+                              <div className="admin-diag-row">
+                                <span className="admin-diag-label">Tenant ID:</span>
+                                <span className="admin-diag-value">{settingsErrorDetail.tenantId}</span>
+                              </div>
+                            )}
+                          </div>
 
-                    <div className="admin-settings-block">
-                      <label className="admin-label">Поведение после заявки</label>
-                      <select
-                        className="admin-input"
-                        value={settings.ai_after_submit_behavior ?? 'polite_close'}
-                        onChange={(e) => setSettings({ ...settings, ai_after_submit_behavior: e.target.value })}
-                      >
-                        <option value="polite_close">Вежливо завершить</option>
-                      </select>
-                    </div>
-
-                    {actionError && <div className="admin-alert admin-alert--error">{actionError}</div>}
-
-                    <button
-                      className="admin-btn admin-btn--primary"
-                      type="button"
-                      onClick={handleSaveAi}
-                      disabled={actionStatus === 'loading'}
-                    >
-                      {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить'}
-                    </button>
-
-                    {/* Diagnostics: Last Check Status */}
-                    {lastCheck && (
-                      <div style={{ marginTop: 12, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ color: lastCheck.status === 'ok' ? 'var(--admin-success-color)' : 'var(--admin-error-color)' }}>
-                          Последняя проверка: {lastCheck.status === 'ok' ? 'OK' : 'FAIL'} ({lastCheck.time})
-                        </span>
-
-                        {lastCheck.status === 'fail' && !!lastCheck.raw && (
-                          <button
-                            type="button"
-                            className="admin-btn-link"
-                            style={{ fontSize: 12 }}
-                            onClick={() => {
-                              navigator.clipboard.writeText(JSON.stringify({
-                                tenant_id: activeTenant.id,
-                                endpoint: `/api/admin/tenants/${activeTenant.id}/settings`,
-                                response: lastCheck.raw
-                              }, null, 2))
-                              showToast('JSON скопирован в буфер')
-                            }}
-                          >
-                            Скопировать диагностику
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* READY STATE - WhatsApp Tab */}
-              {settingsStatus === 'ready' && activeTab === 'whatsapp' && (
-                <div className="admin-settings-section">
-                  <div className="admin-settings-block">
-                    <label className="admin-label">Источник WhatsApp</label>
-                    <select
-                      className="admin-input"
-                      value={settings.whatsapp_source ?? 'chatflow'}
-                      onChange={(e) =>
-                        setSettings({ ...settings, whatsapp_source: e.target.value as TenantSettings['whatsapp_source'] })
-                      }
-                    >
-                      <option value="chatflow">ChatFlow</option>
-                      <option value="amomarket">AmoCRM Marketplace</option>
-                    </select>
-                    <div className="admin-settings-hint" style={{ marginTop: 8, color: '#f59e0b' }}>
-                      Выберите только один источник. Нельзя использовать оба.
-                    </div>
-                  </div>
-
-                  {settings.whatsapp_source === 'amomarket' ? (
-                    <div className="admin-info-box">
-                      <strong>AmoCRM Marketplace</strong>
-                      <br />
-                      WhatsApp подключается внутри AmoCRM. Вебхук настраивать не нужно.
-                    </div>
-                  ) : (
-                    <>
-                      {/* Status based on server binding info */}
-                      <div className={`admin-status-box ${serverWhatsApp.binding_exists || isBound ? 'admin-status-box--ok' : 'admin-status-box--warn'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>
-                          {serverWhatsApp.binding_exists || isBound
-                            ? '✅ Привязано — бот готов отвечать'
-                            : '⚠️ Не привязано — бот не сможет отвечать'}
-                        </span>
-                        {/* Last check info in status box if available */}
-                        {lastCheck && settings.whatsapp_source === 'chatflow' && (
-                          <span style={{ fontSize: '0.85em', opacity: 0.8 }}>
-                            Check: {lastCheck.status.toUpperCase()} {lastCheck.time}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Show masked token info if we have it from server */}
-                      {(serverWhatsApp.token_masked || settings.chatflow_token_masked) && (
-                        <div className="admin-info-box">
-                          <strong>Текущий токен:</strong> {serverWhatsApp.token_masked || settings.chatflow_token_masked}
-                          <br />
-                          <small>Оставьте поле пустым, чтобы сохранить текущий токен. Введите новый токен, чтобы обновить.</small>
+                          {/* Response body preview */}
+                          {settingsErrorDetail.responseBody && (
+                            <div className="admin-error-response">
+                              <div className="admin-diag-label">Response (первые 500 символов):</div>
+                              <pre className="admin-error-response-body">{settingsErrorDetail.responseBody}</pre>
+                            </div>
+                          )}
                         </div>
                       )}
 
-                      <div className="admin-form-grid">
-                        <div className="admin-settings-block">
-                          <label className="admin-label">
-                            ChatFlow Token (JWT)
-                            {dirtyFields.has('chatflow_token') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
-                          </label>
-                          <textarea
-                            className="admin-input admin-input--textarea"
-                            value={settings.chatflow_token ?? ''}
-                            onChange={(e) => {
-                              setSettings({ ...settings, chatflow_token: e.target.value })
-                              setDirtyFields(prev => new Set(prev).add('chatflow_token'))
-                            }}
-                            placeholder={serverWhatsApp.token_masked ? '(оставьте пустым для сохранения текущего)' : 'eyJhbGciOiJIUzI1NiIs...'}
-                            rows={3}
-                          />
-                        </div>
-
-                        <div className="admin-settings-block">
-                          <label className="admin-label">
-                            Instance ID
-                            {dirtyFields.has('chatflow_instance_id') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
-                          </label>
-                          <input
-                            className="admin-input"
-                            type="text"
-                            value={settings.chatflow_instance_id ?? ''}
-                            onChange={(e) => {
-                              setSettings({ ...settings, chatflow_instance_id: e.target.value })
-                              setDirtyFields(prev => new Set(prev).add('chatflow_instance_id'))
-                            }}
-                            placeholder="ID инстанса (QR в ChatFlow)"
-                          />
-                        </div>
-
-                        <div className="admin-settings-block">
-                          <label className="admin-label">
-                            Номер телефона
-                            {dirtyFields.has('chatflow_phone_number') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
-                          </label>
-                          <input
-                            className="admin-input"
-                            type="text"
-                            value={settings.chatflow_phone_number ?? ''}
-                            onChange={(e) => {
-                              setSettings({ ...settings, chatflow_phone_number: e.target.value })
-                              setDirtyFields(prev => new Set(prev).add('chatflow_phone_number'))
-                            }}
-                            placeholder="+77001234567"
-                          />
-                        </div>
-
-                        <div className="admin-settings-block">
-                          <div className="admin-settings-row">
-                            <span className="admin-label" style={{ marginBottom: 0 }}>
-                              Активен
-                            </span>
-                            <label className="admin-switch">
-                              <input
-                                type="checkbox"
-                                checked={settings.chatflow_active !== false}
-                                onChange={(e) => {
-                                  setSettings({ ...settings, chatflow_active: e.target.checked })
-                                  setDirtyFields(prev => new Set(prev).add('chatflow_active'))
-                                }}
-                              />
-                              <span className="admin-switch-track">
-                                <span className="admin-switch-thumb" />
-                              </span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Test WhatsApp Section */}
-                      <div className="admin-settings-block" style={{ marginTop: 24, padding: 16, background: '#f8f9fa', borderRadius: 8 }}>
-                        <div className="admin-subheading">Проверка отправки</div>
-                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                          <input
-                            className="admin-input"
-                            style={{ flex: 1 }}
-                            placeholder="+7..."
-                            value={waTestPhone}
-                            onChange={e => setWaTestPhone(e.target.value)}
-                          />
+                      <div className="admin-error-actions">
+                        <button className="admin-btn admin-btn--primary" type="button" onClick={handleRetrySettings}>
+                          Повторить
+                        </button>
+                        {settingsErrorDetail && (
                           <button
                             className="admin-btn admin-btn--secondary"
                             type="button"
-                            onClick={handleTestWhatsApp}
-                            disabled={waTestStatus === 'loading'}
+                            onClick={() => {
+                              const diag = {
+                                url: settingsErrorDetail.url,
+                                status: settingsErrorDetail.status,
+                                detail: settingsErrorDetail.detail,
+                                responseBody: settingsErrorDetail.responseBody,
+                                hasAuthHeader: settingsErrorDetail.hasAuthHeader,
+                                tenantId: settingsErrorDetail.tenantId,
+                                timestamp: new Date().toISOString(),
+                              }
+                              navigator.clipboard.writeText(JSON.stringify(diag, null, 2))
+                              showToast('Диагностика скопирована')
+                            }}
                           >
-                            {waTestStatus === 'loading' ? 'Отправка...' : 'Отправить тест'}
+                            📋 Скопировать диагностику
                           </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* READY STATE - AI Tab */}
+                  {settingsStatus === 'ready' && activeTab === 'ai' && (
+                    <div className="admin-settings-section">
+                      <div className="admin-settings-block">
+                        <div className="admin-settings-row">
+                          <div className="admin-settings-info">
+                            <div className="admin-settings-label">AI-менеджер (глобально)</div>
+                            <div className="admin-settings-hint">
+                              Когда выключено — бот не отвечает, но лиды сохраняются.
+                            </div>
+                          </div>
+                          <label className="admin-switch">
+                            <input
+                              type="checkbox"
+                              checked={settings.ai_enabled !== false}
+                              onChange={(e) => setSettings({ ...settings, ai_enabled: e.target.checked })}
+                            />
+                            <span className="admin-switch-track">
+                              <span className="admin-switch-thumb" />
+                            </span>
+                          </label>
                         </div>
-                        {waTestResult && (
-                          <div className={`admin-alert ${waTestResult.ok ? 'admin-alert--success' : 'admin-alert--error'}`} style={{ marginTop: 12 }}>
-                            {waTestResult.message}
-                            {waTestResult.details && (
-                              <details>
-                                <summary>Подробнее</summary>
-                                <pre style={{ fontSize: 10, marginTop: 5 }}>{waTestResult.details}</pre>
-                              </details>
+                      </div>
+
+                      <div className="admin-settings-block">
+                        <label className="admin-label">AI инструкция (prompt)</label>
+                        <div className="admin-settings-hint" style={{ marginBottom: 8 }}>
+                          Укажите контекст: что продаёте, как общаться, какую информацию собирать.
+                          <div className="admin-field-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <label className="admin-label" style={{ margin: 0 }}>System AI Prompt</label>
+                            <button
+                              type="button"
+                              className="admin-btn-link admin-btn-link--danger"
+                              onClick={handleClearAiPrompt}
+                              style={{ fontSize: 12, textDecoration: 'underline', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+                            >
+                              Очистить prompt
+                            </button>
+                          </div>
+                          <textarea
+                            className="admin-input admin-input--textarea"
+                            value={settings.ai_prompt ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              setSettings(p => ({ ...p, ai_prompt: val }))
+                              setDirtyFields(d => new Set(d).add('ai_prompt'))
+                            }}
+                            placeholder="Ты — полезный ассистент..."
+                            rows={8}
+                          />
+                          <div className="admin-settings-hint" style={{ marginTop: 4 }}>
+                            {!settings.ai_prompt && '⚠️ Prompt пустой — AI будет отвечать дефолтными фразами.'}
+                            {settings.ai_prompt && `Длина: ${settings.ai_prompt.length} символов`}
+                          </div>
+                          <div className="admin-char-counter">
+                            {(settings.ai_prompt ?? '').length} символов
+                          </div>
+                        </div>
+
+                        <div className="admin-settings-block">
+                          <label className="admin-label">Поведение после заявки</label>
+                          <select
+                            className="admin-input"
+                            value={settings.ai_after_submit_behavior ?? 'polite_close'}
+                            onChange={(e) => setSettings({ ...settings, ai_after_submit_behavior: e.target.value })}
+                          >
+                            <option value="polite_close">Вежливо завершить</option>
+                          </select>
+                        </div>
+
+                        {actionError && <div className="admin-alert admin-alert--error">{actionError}</div>}
+
+                        <button
+                          className="admin-btn admin-btn--primary"
+                          type="button"
+                          onClick={handleSaveAi}
+                          disabled={actionStatus === 'loading'}
+                        >
+                          {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить'}
+                        </button>
+
+                        {/* Diagnostics: Last Check Status */}
+                        {lastCheck && (
+                          <div style={{ marginTop: 12, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ color: lastCheck.status === 'ok' ? 'var(--admin-success-color)' : 'var(--admin-error-color)' }}>
+                              Последняя проверка: {lastCheck.status === 'ok' ? 'OK' : 'FAIL'} ({lastCheck.time})
+                            </span>
+
+                            {lastCheck.status === 'fail' && !!lastCheck.raw && (
+                              <button
+                                type="button"
+                                className="admin-btn-link"
+                                style={{ fontSize: 12 }}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(JSON.stringify({
+                                    tenant_id: activeTenant.id,
+                                    endpoint: `/api/admin/tenants/${activeTenant.id}/settings`,
+                                    response: lastCheck.raw
+                                  }, null, 2))
+                                  showToast('JSON скопирован в буфер')
+                                }}
+                              >
+                                Скопировать диагностику
+                              </button>
                             )}
                           </div>
                         )}
                       </div>
-                    </>
+                    </div>
                   )}
 
-                  {actionError && <div className="admin-alert admin-alert--error">{actionError}</div>}
-
-                  <div className="admin-btn-group">
-                    <button
-                      className="admin-btn admin-btn--primary"
-                      type="button"
-                      onClick={handleSaveWhatsApp}
-                      disabled={actionStatus === 'loading'}
-                    >
-                      {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить привязку'}
-                    </button>
-
-                  </div>
-                </div>
-              )}
-
-              {/* READY STATE - AmoCRM Tab */}
-              {settingsStatus === 'ready' && activeTab === 'amocrm' && (
-                <div className="admin-settings-section">
-                  {amoLoading ? (
-                    <div className="admin-loading-panel">
-                      <div className="admin-spinner" />
-                      <p>Загрузка статуса...</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div
-                        className={`admin-status-box ${amoStatus?.connected ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}
-                      >
-                        {amoStatus?.connected ? '✅ AmoCRM подключён' : '⚠️ AmoCRM не подключён'}
+                  {/* READY STATE - WhatsApp Tab */}
+                  {settingsStatus === 'ready' && activeTab === 'whatsapp' && (
+                    <div className="admin-settings-section">
+                      <div className="admin-settings-block">
+                        <label className="admin-label">Источник WhatsApp</label>
+                        <select
+                          className="admin-input"
+                          value={settings.whatsapp_source ?? 'chatflow'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, whatsapp_source: e.target.value as TenantSettings['whatsapp_source'] })
+                          }
+                        >
+                          <option value="chatflow">ChatFlow</option>
+                          <option value="amomarket">AmoCRM Marketplace</option>
+                        </select>
+                        <div className="admin-settings-hint" style={{ marginTop: 8, color: '#f59e0b' }}>
+                          Выберите только один источник. Нельзя использовать оба.
+                        </div>
                       </div>
 
-                      {amoStatus?.connected && (
+                      {settings.whatsapp_source === 'amomarket' ? (
                         <div className="admin-info-box">
-                          <strong>Домен:</strong> {amoStatus.domain || '—'}
+                          <strong>AmoCRM Marketplace</strong>
                           <br />
-                          <strong>Истекает:</strong>{' '}
-                          {amoStatus.expires_at ? new Date(amoStatus.expires_at).toLocaleString() : '—'}
+                          WhatsApp подключается внутри AmoCRM. Вебхук настраивать не нужно.
                         </div>
+                      ) : (
+                        <>
+                          {/* Status based on server binding info */}
+                          <div className={`admin-status-box ${serverWhatsApp.binding_exists || isBound ? 'admin-status-box--ok' : 'admin-status-box--warn'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>
+                              {serverWhatsApp.binding_exists || isBound
+                                ? '✅ Привязано — бот готов отвечать'
+                                : '⚠️ Не привязано — бот не сможет отвечать'}
+                            </span>
+                            {/* Last check info in status box if available */}
+                            {lastCheck && settings.whatsapp_source === 'chatflow' && (
+                              <span style={{ fontSize: '0.85em', opacity: 0.8 }}>
+                                Check: {lastCheck.status.toUpperCase()} {lastCheck.time}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Show masked token info if we have it from server */}
+                          {(serverWhatsApp.token_masked || settings.chatflow_token_masked) && (
+                            <div className="admin-info-box">
+                              <strong>Текущий токен:</strong> {serverWhatsApp.token_masked || settings.chatflow_token_masked}
+                              <br />
+                              <small>Оставьте поле пустым, чтобы сохранить текущий токен. Введите новый токен, чтобы обновить.</small>
+                            </div>
+                          )}
+
+                          <div className="admin-form-grid">
+                            <div className="admin-settings-block">
+                              <label className="admin-label">
+                                ChatFlow Token (JWT)
+                                {dirtyFields.has('chatflow_token') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
+                              </label>
+                              <textarea
+                                className="admin-input admin-input--textarea"
+                                value={settings.chatflow_token ?? ''}
+                                onChange={(e) => {
+                                  setSettings({ ...settings, chatflow_token: e.target.value })
+                                  setDirtyFields(prev => new Set(prev).add('chatflow_token'))
+                                }}
+                                placeholder={serverWhatsApp.token_masked ? '(оставьте пустым для сохранения текущего)' : 'eyJhbGciOiJIUzI1NiIs...'}
+                                rows={3}
+                              />
+                            </div>
+
+                            <div className="admin-settings-block">
+                              <label className="admin-label">
+                                Instance ID
+                                {dirtyFields.has('chatflow_instance_id') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
+                              </label>
+                              <input
+                                className="admin-input"
+                                type="text"
+                                value={settings.chatflow_instance_id ?? ''}
+                                onChange={(e) => {
+                                  setSettings({ ...settings, chatflow_instance_id: e.target.value })
+                                  setDirtyFields(prev => new Set(prev).add('chatflow_instance_id'))
+                                }}
+                                placeholder="ID инстанса (QR в ChatFlow)"
+                              />
+                            </div>
+
+                            <div className="admin-settings-block">
+                              <label className="admin-label">
+                                Номер телефона
+                                {dirtyFields.has('chatflow_phone_number') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
+                              </label>
+                              <input
+                                className="admin-input"
+                                type="text"
+                                value={settings.chatflow_phone_number ?? ''}
+                                onChange={(e) => {
+                                  setSettings({ ...settings, chatflow_phone_number: e.target.value })
+                                  setDirtyFields(prev => new Set(prev).add('chatflow_phone_number'))
+                                }}
+                                placeholder="+77001234567"
+                              />
+                            </div>
+
+                            <div className="admin-settings-block">
+                              <div className="admin-settings-row">
+                                <span className="admin-label" style={{ marginBottom: 0 }}>
+                                  Активен
+                                </span>
+                                <label className="admin-switch">
+                                  <input
+                                    type="checkbox"
+                                    checked={settings.chatflow_active !== false}
+                                    onChange={(e) => {
+                                      setSettings({ ...settings, chatflow_active: e.target.checked })
+                                      setDirtyFields(prev => new Set(prev).add('chatflow_active'))
+                                    }}
+                                  />
+                                  <span className="admin-switch-track">
+                                    <span className="admin-switch-thumb" />
+                                  </span>
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Test WhatsApp Section */}
+                          <div className="admin-settings-block" style={{ marginTop: 24, padding: 16, background: '#f8f9fa', borderRadius: 8 }}>
+                            <div className="admin-subheading">Проверка отправки</div>
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                              <input
+                                className="admin-input"
+                                style={{ flex: 1 }}
+                                placeholder="+7..."
+                                value={waTestPhone}
+                                onChange={e => setWaTestPhone(e.target.value)}
+                              />
+                              <button
+                                className="admin-btn admin-btn--secondary"
+                                type="button"
+                                onClick={handleTestWhatsApp}
+                                disabled={waTestStatus === 'loading'}
+                              >
+                                {waTestStatus === 'loading' ? 'Отправка...' : 'Отправить тест'}
+                              </button>
+                            </div>
+                            {waTestResult && (
+                              <div className={`admin-alert ${waTestResult.ok ? 'admin-alert--success' : 'admin-alert--error'}`} style={{ marginTop: 12 }}>
+                                {waTestResult.message}
+                                {waTestResult.details && (
+                                  <details>
+                                    <summary>Подробнее</summary>
+                                    <pre style={{ fontSize: 10, marginTop: 5 }}>{waTestResult.details}</pre>
+                                  </details>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </>
                       )}
 
-                      <div className="admin-settings-block">
-                        <label className="admin-label">Домен AmoCRM</label>
-                        <div className="admin-form-row-inline">
-                          <input
-                            className="admin-input"
-                            type="text"
-                            value={amoBaseDomain}
-                            onChange={(e) => setAmoBaseDomain(e.target.value)}
-                            onBlur={(e) => {
-                              // Normalize domain on blur (extract hostname from full URL)
-                              const normalized = normalizeAmoDomain(e.target.value)
-                              if (normalized && normalized !== e.target.value) {
-                                setAmoBaseDomain(normalized)
-                              }
-                            }}
-                            placeholder="mycompany.amocrm.ru"
-                          />
-                          <button
-                            className="admin-btn admin-btn--secondary"
-                            type="button"
-                            onClick={handleSaveAmoDomain}
-                            disabled={actionStatus === 'loading'}
-                          >
-                            Сохранить
-                          </button>
-                        </div>
-                        <div className="admin-settings-hint" style={{ marginTop: 4 }}>
-                          Можно вставить ссылку целиком, например: https://company.amocrm.ru/leads/
-                        </div>
-                      </div>
+                      {actionError && <div className="admin-alert admin-alert--error">{actionError}</div>}
 
                       <div className="admin-btn-group">
                         <button
                           className="admin-btn admin-btn--primary"
                           type="button"
-                          onClick={handleConnectAmo}
+                          onClick={handleSaveWhatsApp}
                           disabled={actionStatus === 'loading'}
                         >
-                          {amoStatus?.connected ? 'Переподключить' : 'Подключить AmoCRM'}
+                          {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить привязку'}
                         </button>
-                        <button
-                          className="admin-btn admin-btn--ghost"
-                          type="button"
-                          onClick={handleRefreshAmoStatus}
-                          disabled={amoLoading}
-                        >
-                          Обновить статус
-                        </button>
-                        <button
-                          className="admin-btn admin-btn--ghost"
-                          type="button"
-                          onClick={() => setHelpOpen(true)}
-                        >
-                          ❓ Как подключить
-                        </button>
+
                       </div>
+                    </div>
+                  )}
 
-                      {amoStatus?.connected && (
-                        <div className="admin-settings-block" style={{ marginTop: 24 }}>
-                          <div className="admin-divider" />
-                          <label className="admin-label">Воронки и стадии AmoCRM</label>
+                  {/* READY STATE - AmoCRM Tab */}
+                  {settingsStatus === 'ready' && activeTab === 'amocrm' && (
+                    <div className="admin-settings-section">
+                      {amoLoading ? (
+                        <div className="admin-loading-panel">
+                          <div className="admin-spinner" />
+                          <p>Загрузка статуса...</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div
+                            className={`admin-status-box ${amoStatus?.connected ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}
+                          >
+                            {amoStatus?.connected ? '✅ AmoCRM подключён' : '⚠️ AmoCRM не подключён'}
+                          </div>
 
-                          {/* Load pipelines button */}
-                          <div className="admin-btn-group" style={{ marginBottom: 16 }}>
+                          {amoStatus?.connected && (
+                            <div className="admin-info-box">
+                              <strong>Домен:</strong> {amoStatus.domain || '—'}
+                              <br />
+                              <strong>Истекает:</strong>{' '}
+                              {amoStatus.expires_at ? new Date(amoStatus.expires_at).toLocaleString() : '—'}
+                            </div>
+                          )}
+
+                          <div className="admin-settings-block">
+                            <label className="admin-label">Домен AmoCRM</label>
+                            <div className="admin-form-row-inline">
+                              <input
+                                className="admin-input"
+                                type="text"
+                                value={amoBaseDomain}
+                                onChange={(e) => setAmoBaseDomain(e.target.value)}
+                                onBlur={(e) => {
+                                  // Normalize domain on blur (extract hostname from full URL)
+                                  const normalized = normalizeAmoDomain(e.target.value)
+                                  if (normalized && normalized !== e.target.value) {
+                                    setAmoBaseDomain(normalized)
+                                  }
+                                }}
+                                placeholder="mycompany.amocrm.ru"
+                              />
+                              <button
+                                className="admin-btn admin-btn--secondary"
+                                type="button"
+                                onClick={handleSaveAmoDomain}
+                                disabled={actionStatus === 'loading'}
+                              >
+                                Сохранить
+                              </button>
+                            </div>
+                            <div className="admin-settings-hint" style={{ marginTop: 4 }}>
+                              Можно вставить ссылку целиком, например: https://company.amocrm.ru/leads/
+                            </div>
+                          </div>
+
+                          <div className="admin-btn-group">
                             <button
-                              className="admin-btn admin-btn--secondary"
+                              className="admin-btn admin-btn--primary"
                               type="button"
-                              onClick={() => activeTenant && loadPipelines(activeTenant.id)}
-                              disabled={pipelinesLoading}
+                              onClick={handleConnectAmo}
+                              disabled={actionStatus === 'loading'}
                             >
-                              {pipelinesLoading ? 'Загрузка...' : '📥 Загрузить воронки'}
+                              {amoStatus?.connected ? 'Переподключить' : 'Подключить AmoCRM'}
+                            </button>
+                            <button
+                              className="admin-btn admin-btn--ghost"
+                              type="button"
+                              onClick={handleRefreshAmoStatus}
+                              disabled={amoLoading}
+                            >
+                              Обновить статус
+                            </button>
+                            <button
+                              className="admin-btn admin-btn--ghost"
+                              type="button"
+                              onClick={() => setHelpOpen(true)}
+                            >
+                              ❓ Как подключить
                             </button>
                           </div>
 
-                          {/* Pipeline selector */}
-                          {amoPipelines.length > 0 && (
-                            <div className="admin-settings-block">
-                              <label className="admin-label">Выберите воронку</label>
-                              <select
-                                className="admin-input"
-                                value={selectedPipelineId}
-                                onChange={(e) => {
-                                  setSelectedPipelineId(e.target.value)
-                                  if (e.target.value && activeTenant) {
-                                    loadStages(activeTenant.id, e.target.value)
-                                  }
-                                }}
-                              >
-                                <option value="">— Выберите воронку —</option>
-                                {amoPipelines.map(p => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name} {p.is_main ? '(основная)' : ''}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
+                          {amoStatus?.connected && (
+                            <div className="admin-settings-block" style={{ marginTop: 24 }}>
+                              <div className="admin-divider" />
+                              <label className="admin-label">Воронки и стадии AmoCRM</label>
 
-                          {/* Stages list */}
-                          {stagesLoading && (
-                            <div className="admin-loading-panel" style={{ padding: 16 }}>
-                              <div className="admin-spinner admin-spinner--sm" />
-                              <span>Загрузка стадий...</span>
-                            </div>
-                          )}
-
-                          {!stagesLoading && amoStages.length > 0 && (
-                            <div className="admin-settings-block">
-                              <label className="admin-label">Стадии воронки</label>
-                              <div className="admin-stages-list">
-                                {amoStages.map(stage => (
-                                  <div key={stage.id} className="admin-stage-item">
-                                    <span className="admin-stage-name">{stage.name}</span>
-                                    <span className="admin-stage-id">ID: {stage.id}</span>
-                                    {stage.is_won && <span className="admin-badge admin-badge--ok">Won</span>}
-                                    {stage.is_lost && <span className="admin-badge admin-badge--off">Lost</span>}
-                                  </div>
-                                ))}
+                              {/* Load pipelines button */}
+                              <div className="admin-btn-group" style={{ marginBottom: 16 }}>
+                                <button
+                                  className="admin-btn admin-btn--secondary"
+                                  type="button"
+                                  onClick={() => activeTenant && loadPipelines(activeTenant.id)}
+                                  disabled={pipelinesLoading}
+                                >
+                                  {pipelinesLoading ? 'Загрузка...' : '📥 Загрузить воронки'}
+                                </button>
                               </div>
 
+                              {/* Pipeline selector */}
+                              {amoPipelines.length > 0 && (
+                                <div className="admin-settings-block">
+                                  <label className="admin-label">Выберите воронку</label>
+                                  <select
+                                    className="admin-input"
+                                    value={selectedPipelineId}
+                                    onChange={(e) => {
+                                      setSelectedPipelineId(e.target.value)
+                                      if (e.target.value && activeTenant) {
+                                        loadStages(activeTenant.id, e.target.value)
+                                      }
+                                    }}
+                                  >
+                                    <option value="">— Выберите воронку —</option>
+                                    {amoPipelines.map(p => (
+                                      <option key={p.id} value={p.id}>
+                                        {p.name} {p.is_main ? '(основная)' : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+
+                              {/* Stages list */}
+                              {stagesLoading && (
+                                <div className="admin-loading-panel" style={{ padding: 16 }}>
+                                  <div className="admin-spinner admin-spinner--sm" />
+                                  <span>Загрузка стадий...</span>
+                                </div>
+                              )}
+
+                              {!stagesLoading && amoStages.length > 0 && (
+                                <div className="admin-settings-block">
+                                  <label className="admin-label">Стадии воронки</label>
+                                  <div className="admin-stages-list">
+                                    {amoStages.map(stage => (
+                                      <div key={stage.id} className="admin-stage-item">
+                                        <span className="admin-stage-name">{stage.name}</span>
+                                        <span className="admin-stage-id">ID: {stage.id}</span>
+                                        {stage.is_won && <span className="admin-badge admin-badge--ok">Won</span>}
+                                        {stage.is_lost && <span className="admin-badge admin-badge--off">Lost</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <button
+                                    className="admin-btn admin-btn--accent"
+                                    type="button"
+                                    onClick={handleAutoFillMapping}
+                                    style={{ marginTop: 12 }}
+                                  >
+                                    ✨ Автозаполнить маппинг по названиям
+                                  </button>
+                                </div>
+                              )}
+
+                              <div className="admin-divider" />
+
+                              {/* Mapping table */}
+                              <label className="admin-label">Маппинг стадий</label>
+                              <div className="admin-settings-hint" style={{ marginBottom: 12 }}>
+                                Укажите ID стадий из вашей воронки AmoCRM для каждого статуса лида.
+                              </div>
+                              <table className="admin-mapping-table">
+                                <thead>
+                                  <tr>
+                                    <th>Статус лида</th>
+                                    <th>Stage ID</th>
+                                    <th>Быстрый выбор</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {amoMapping.map((m, i) => (
+                                    <tr key={m.stage_key}>
+                                      <td>{STAGE_KEY_LABELS[m.stage_key] || m.stage_key}</td>
+                                      <td>
+                                        <input
+                                          className="admin-input"
+                                          type="text"
+                                          value={m.stage_id ?? ''}
+                                          onChange={(e) => {
+                                            const val = e.target.value.trim()
+                                            setAmoMapping((prev) =>
+                                              prev.map((x, j) => (j === i ? { ...x, stage_id: val || null } : x))
+                                            )
+                                          }}
+                                          placeholder="ID стадии"
+                                        />
+                                      </td>
+                                      <td>
+                                        {amoStages.length > 0 && (
+                                          <select
+                                            className="admin-input admin-input--sm"
+                                            value={m.stage_id ?? ''}
+                                            onChange={(e) => {
+                                              const val = e.target.value
+                                              setAmoMapping((prev) =>
+                                                prev.map((x, j) => (j === i ? { ...x, stage_id: val || null } : x))
+                                              )
+                                            }}
+                                          >
+                                            <option value="">—</option>
+                                            {amoStages.map(s => (
+                                              <option key={s.id} value={s.id}>
+                                                {s.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
                               <button
-                                className="admin-btn admin-btn--accent"
+                                className="admin-btn admin-btn--primary"
                                 type="button"
-                                onClick={handleAutoFillMapping}
+                                onClick={handleSaveAmoMapping}
+                                disabled={actionStatus === 'loading'}
                                 style={{ marginTop: 12 }}
                               >
-                                ✨ Автозаполнить маппинг по названиям
+                                {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить маппинг'}
                               </button>
                             </div>
                           )}
 
-                          <div className="admin-divider" />
-
-                          {/* Mapping table */}
-                          <label className="admin-label">Маппинг стадий</label>
-                          <div className="admin-settings-hint" style={{ marginBottom: 12 }}>
-                            Укажите ID стадий из вашей воронки AmoCRM для каждого статуса лида.
-                          </div>
-                          <table className="admin-mapping-table">
-                            <thead>
-                              <tr>
-                                <th>Статус лида</th>
-                                <th>Stage ID</th>
-                                <th>Быстрый выбор</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {amoMapping.map((m, i) => (
-                                <tr key={m.stage_key}>
-                                  <td>{STAGE_KEY_LABELS[m.stage_key] || m.stage_key}</td>
-                                  <td>
-                                    <input
-                                      className="admin-input"
-                                      type="text"
-                                      value={m.stage_id ?? ''}
-                                      onChange={(e) => {
-                                        const val = e.target.value.trim()
-                                        setAmoMapping((prev) =>
-                                          prev.map((x, j) => (j === i ? { ...x, stage_id: val || null } : x))
-                                        )
-                                      }}
-                                      placeholder="ID стадии"
-                                    />
-                                  </td>
-                                  <td>
-                                    {amoStages.length > 0 && (
-                                      <select
-                                        className="admin-input admin-input--sm"
-                                        value={m.stage_id ?? ''}
-                                        onChange={(e) => {
-                                          const val = e.target.value
-                                          setAmoMapping((prev) =>
-                                            prev.map((x, j) => (j === i ? { ...x, stage_id: val || null } : x))
-                                          )
-                                        }}
-                                      >
-                                        <option value="">—</option>
-                                        {amoStages.map(s => (
-                                          <option key={s.id} value={s.id}>
-                                            {s.name}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          <button
-                            className="admin-btn admin-btn--primary"
-                            type="button"
-                            onClick={handleSaveAmoMapping}
-                            disabled={actionStatus === 'loading'}
-                            style={{ marginTop: 12 }}
-                          >
-                            {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить маппинг'}
-                          </button>
-                        </div>
+                          {actionError && (
+                            <div className="admin-alert admin-alert--error" style={{ marginTop: 16 }}>
+                              {actionError}
+                            </div>
+                          )}
+                        </>
                       )}
-
-                      {actionError && (
-                        <div className="admin-alert admin-alert--error" style={{ marginTop: 16 }}>
-                          {actionError}
-                        </div>
-                      )}
-                    </>
+                    </div>
                   )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
-        </div>
-      )
-      }
+
+        )}
+
 
       {/* Users Modal */}
       {
         usersOpen && activeTenant && (
-          <div className="admin-modal-backdrop" onClick={closeUsers}>
+          <div className="admin-modal-overlay" onClick={closeUsers}>
             <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
               <div className="admin-modal-header">
                 <h2 className="admin-modal-title">Пользователи — {activeTenant.name}</h2>
@@ -1753,7 +1773,7 @@ const AdminTenants = () => {
       {/* Self-Check Modal */}
       {
         checkOpen && activeTenant && (
-          <div className="admin-modal-backdrop" onClick={closeCheck}>
+          <div className="admin-modal-overlay" onClick={closeCheck}>
             <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
               <div className="admin-modal-header">
                 <h2 className="admin-modal-title">Проверка — {activeTenant.name}</h2>
@@ -1813,7 +1833,7 @@ const AdminTenants = () => {
       {/* AmoCRM Help Modal */}
       {
         helpOpen && (
-          <div className="admin-modal-backdrop" onClick={() => setHelpOpen(false)}>
+          <div className="admin-modal-overlay" onClick={() => setHelpOpen(false)}>
             <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
               <div className="admin-modal-header">
                 <h2 className="admin-modal-title">Как подключить AmoCRM</h2>

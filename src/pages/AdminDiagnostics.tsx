@@ -113,18 +113,20 @@ const AdminDiagnostics = () => {
   }
 
   return (
-    <div className="admin-container">
-      <div className="admin-page-header">
+    <div className="admin-content-wrapper">
+      <div className="admin-header">
         <div>
-          <h1 className="admin-page-title">Диагностика</h1>
-          <p className="admin-page-subtitle">Проверка таблиц, smoke test, AI prompt, mute</p>
+          <h1 className="admin-title">Диагностика</h1>
+          <p style={{ color: 'var(--admin-text-secondary)', marginTop: 4 }}>
+            Проверка таблиц, smoke test, AI prompt, mute
+          </p>
         </div>
       </div>
 
-      <div className="admin-grid-2">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 24 }}>
         {/* DB Check */}
-        <div className="card admin-settings-block">
-          <div className="card-title">1. Проверка таблиц (DB)</div>
+        <div className="admin-card">
+          <h3 className="admin-subtitle">1. Проверка таблиц (DB)</h3>
           <p className="info-text">
             GET /api/admin/diagnostics/db
           </p>
@@ -139,8 +141,8 @@ const AdminDiagnostics = () => {
         </div>
 
         {/* Smoke Test */}
-        <div className="card admin-settings-block">
-          <div className="card-title">2. Smoke Check</div>
+        <div className="admin-card">
+          <h3 className="admin-subtitle">2. Smoke Check</h3>
           <p className="info-text">
             POST /api/admin/diagnostics/smoke-test
           </p>
@@ -155,8 +157,8 @@ const AdminDiagnostics = () => {
         </div>
 
         {/* AI Check */}
-        <div className="card admin-settings-block">
-          <div className="card-title">3. Проверить AI ответ</div>
+        <div className="admin-card">
+          <h3 className="admin-subtitle">3. Проверить AI ответ</h3>
           <div className="admin-form-grid">
             <label className="admin-label">
               Клиент (tenant)
@@ -193,8 +195,8 @@ const AdminDiagnostics = () => {
         </div>
 
         {/* Mute Check */}
-        <div className="card admin-settings-block">
-          <div className="card-title">4. Проверить Mute</div>
+        <div className="admin-card">
+          <h3 className="admin-subtitle">4. Проверить Mute</h3>
           <div className="admin-form-grid">
             <label className="admin-label">
               Клиент (tenant)
