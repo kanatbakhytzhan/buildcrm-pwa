@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import type { FormEvent } from 'react'
 import {
   addTenantUser,
   getAdminTenants,
   getAmoAuthUrl,
   getAmoPipelineMapping,
+  getAmoPipelines,
+  getAmoStages,
   getAmoStatus,
   getTenantSettings,
   getTenantUsers,
@@ -13,9 +15,12 @@ import {
   postTenantWhatsappBinding,
   saveAmoPipelineMapping,
   selfCheckTenant,
+  STAGE_NAME_TO_KEY,
   updateTenantSettings,
   type AdminTenant,
+  type AmoPipeline,
   type AmoPipelineMapping,
+  type AmoStage,
   type AmoStatus,
   type DetailedApiError,
   type SelfCheckResult,
@@ -29,9 +34,21 @@ type SettingsStatus = 'idle' | 'loading' | 'error' | 'ready'
 
 const STAGE_KEY_LABELS: Record<string, string> = {
   new: 'Новый лид',
+  unsorted: 'Неразобранное',
   in_progress: 'В работе',
+  call_1: '1-й звонок',
+  call_2: '2-й звонок',
+  call_3: '3-й звонок',
+  repair_not_ready: 'Ремонт не готов',
+  other_city: 'Другой город',
+  ignore: 'Игнор',
+  measurement_assigned: 'Назначен замер',
+  measurement_done: 'Провел замер',
+  after_measurement_reject: 'Отказ после замера',
   done: 'Успешно закрыт',
+  won: 'Успешно реализовано',
   cancelled: 'Отказ',
+  lost: 'Закрыто и не реализовано',
 }
 
 /** Check if error is DetailedApiError */
@@ -89,6 +106,19 @@ const AdminTenants = () => {
   const [amoMapping, setAmoMapping] = useState<AmoPipelineMapping[]>([])
   const [amoLoading, setAmoLoading] = useState(false)
   const [amoBaseDomain, setAmoBaseDomain] = useState('')
+  
+  // AmoCRM Pipelines & Stages
+  const [amoPipelines, setAmoPipelines] = useState<AmoPipeline[]>([])
+  const [amoStages, setAmoStages] = useState<AmoStage[]>([])
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string>('')
+  const [pipelinesLoading, setPipelinesLoading] = useState(false)
+  const [stagesLoading, setStagesLoading] = useState(false)
+  
+  // Track dirty fields to avoid wiping secrets
+  const [dirtyFields, setDirtyFields] = useState<Set<string>>(new Set())
+  
+  // Reference to preserve settings between tab switches
+  const settingsRef = useRef<TenantSettings | null>(null)
 
   // Users modal
   const [usersOpen, setUsersOpen] = useState(false)
@@ -145,7 +175,7 @@ const AdminTenants = () => {
   }, [loadTenants])
 
   // --- Settings Modal ---
-  const loadSettings = useCallback(async (tenantId: string | number) => {
+  const loadSettings = useCallback(async (tenantId: string | number, preserveLocal = false) => {
     setSettingsStatus('loading')
     setSettingsError(null)
     setSettingsErrorDetail(null)
@@ -157,6 +187,7 @@ const AdminTenants = () => {
 
     try {
       rawSettings = await getTenantSettings(tenantId)
+      console.log('[AdminTenants] Loaded settings:', rawSettings)
     } catch (e) {
       console.error('getTenantSettings failed:', e)
       settingsErr = e
@@ -169,7 +200,6 @@ const AdminTenants = () => {
         setSettingsError(settingsErr.message || 'Ошибка загрузки настроек')
       } else {
         setSettingsError(getErrorMessage(settingsErr) || 'Не удалось загрузить настройки tenant')
-        // Create a basic detailed error for non-detailed errors
         setSettingsErrorDetail({
           message: getErrorMessage(settingsErr),
           tenantId,
@@ -188,25 +218,129 @@ const AdminTenants = () => {
       ])
 
       const safe = safeSettings(rawSettings)
+      
+      // If preserveLocal is true and we have local dirty changes, merge them
+      if (preserveLocal && settingsRef.current && dirtyFields.size > 0) {
+        dirtyFields.forEach(field => {
+          const key = field as keyof TenantSettings
+          if (key in settingsRef.current!) {
+            (safe as Record<string, unknown>)[key] = (settingsRef.current as Record<string, unknown>)[key]
+          }
+        })
+      }
+      
       setSettings(safe)
+      settingsRef.current = safe
       setAmoStatus(rawAmoStatus as AmoStatus)
       setAmoBaseDomain(safe.amocrm_base_domain || (rawAmoStatus as AmoStatus).domain || '')
+      
+      // Build default mapping with more stage keys
+      const defaultMapping: AmoPipelineMapping[] = [
+        { stage_key: 'unsorted', stage_id: null },
+        { stage_key: 'new', stage_id: null },
+        { stage_key: 'in_progress', stage_id: null },
+        { stage_key: 'call_1', stage_id: null },
+        { stage_key: 'call_2', stage_id: null },
+        { stage_key: 'call_3', stage_id: null },
+        { stage_key: 'measurement_assigned', stage_id: null },
+        { stage_key: 'measurement_done', stage_id: null },
+        { stage_key: 'after_measurement_reject', stage_id: null },
+        { stage_key: 'done', stage_id: null },
+        { stage_key: 'won', stage_id: null },
+        { stage_key: 'cancelled', stage_id: null },
+        { stage_key: 'lost', stage_id: null },
+      ]
+      
       setAmoMapping(
         Array.isArray(rawMapping) && rawMapping.length > 0
           ? rawMapping
-          : [
-              { stage_key: 'new', stage_id: null },
-              { stage_key: 'in_progress', stage_id: null },
-              { stage_key: 'done', stage_id: null },
-              { stage_key: 'cancelled', stage_id: null },
-            ]
+          : defaultMapping
       )
+      setDirtyFields(new Set())
       setSettingsStatus('ready')
     } catch (err) {
       setSettingsError(getErrorMessage(err))
       setSettingsStatus('error')
     }
+  }, [dirtyFields])
+  
+  // Load AmoCRM pipelines
+  const loadPipelines = useCallback(async (tenantId: string | number) => {
+    setPipelinesLoading(true)
+    try {
+      const pipelines = await getAmoPipelines(tenantId)
+      setAmoPipelines(pipelines)
+      if (pipelines.length > 0) {
+        const mainPipeline = pipelines.find(p => p.is_main) || pipelines[0]
+        setSelectedPipelineId(String(mainPipeline.id))
+        // Also load stages for this pipeline
+        await loadStages(tenantId, mainPipeline.id)
+      }
+    } catch (err) {
+      setActionError(getErrorMessage(err))
+    } finally {
+      setPipelinesLoading(false)
+    }
   }, [])
+  
+  // Load AmoCRM stages for a pipeline
+  const loadStages = useCallback(async (tenantId: string | number, pipelineId?: string | number) => {
+    setStagesLoading(true)
+    try {
+      const stages = await getAmoStages(tenantId, pipelineId)
+      setAmoStages(stages)
+    } catch (err) {
+      setActionError(getErrorMessage(err))
+    } finally {
+      setStagesLoading(false)
+    }
+  }, [])
+  
+  // Auto-fill mapping based on stage names
+  const handleAutoFillMapping = useCallback(() => {
+    if (amoStages.length === 0) {
+      setActionError('Сначала загрузите стадии из AmoCRM')
+      return
+    }
+    
+    const newMapping: AmoPipelineMapping[] = [...amoMapping]
+    
+    amoStages.forEach(stage => {
+      const nameLower = stage.name.toLowerCase().trim()
+      
+      // Try to match by name
+      let matchedKey: string | null = null
+      
+      // Check exact matches first
+      if (STAGE_NAME_TO_KEY[nameLower]) {
+        matchedKey = STAGE_NAME_TO_KEY[nameLower]
+      } else {
+        // Try partial matches
+        for (const [pattern, key] of Object.entries(STAGE_NAME_TO_KEY)) {
+          if (nameLower.includes(pattern) || pattern.includes(nameLower)) {
+            matchedKey = key
+            break
+          }
+        }
+      }
+      
+      // Check for won/lost flags
+      if (stage.is_won) matchedKey = 'won'
+      if (stage.is_lost) matchedKey = 'lost'
+      
+      if (matchedKey) {
+        const existingIdx = newMapping.findIndex(m => m.stage_key === matchedKey)
+        if (existingIdx !== -1) {
+          newMapping[existingIdx] = { ...newMapping[existingIdx], stage_id: stage.id }
+        } else {
+          newMapping.push({ stage_key: matchedKey, stage_id: stage.id })
+        }
+      }
+    })
+    
+    setAmoMapping(newMapping)
+    showToast('Маппинг заполнен автоматически')
+  }, [amoStages, amoMapping])
 
   const openEdit = (tenant: AdminTenant, tab: ModalTab = 'ai') => {
     setActiveTenant(tenant)
@@ -216,21 +350,27 @@ const AdminTenants = () => {
     setSettingsError(null)
     setSettingsErrorDetail(null)
     setActionError(null)
-    setAmoBaseDomain('')
-    setSettings(safeSettings(null))
+    setDirtyFields(new Set())
+    settingsRef.current = null
+    // Don't reset settings to empty - let loadSettings populate them
     loadSettings(tenant.id)
   }
 
   const closeEdit = () => {
     setEditOpen(false)
     setActiveTenant(null)
-    setSettings(safeSettings(null))
+    // Keep settings in ref for potential reopen
+    settingsRef.current = settings
     setSettingsErrorDetail(null)
     setAmoStatus({ connected: false })
     setAmoMapping([])
+    setAmoPipelines([])
+    setAmoStages([])
+    setSelectedPipelineId('')
     setSettingsStatus('idle')
     setSettingsError(null)
     setActionError(null)
+    setDirtyFields(new Set())
   }
 
   const handleRetrySettings = () => {
@@ -759,10 +899,16 @@ const AdminTenants = () => {
                     <textarea
                       className="admin-input admin-input--textarea"
                       value={settings.ai_prompt ?? ''}
-                      onChange={(e) => setSettings({ ...settings, ai_prompt: e.target.value })}
+                      onChange={(e) => {
+                        setSettings({ ...settings, ai_prompt: e.target.value })
+                        setDirtyFields(prev => new Set(prev).add('ai_prompt'))
+                      }}
                       placeholder="Вы — AI-ассистент компании..."
-                      rows={6}
+                      rows={8}
                     />
+                    <div className="admin-char-counter">
+                      {(settings.ai_prompt ?? '').length} символов
+                    </div>
                   </div>
 
                   <div className="admin-settings-block">
@@ -981,6 +1127,81 @@ const AdminTenants = () => {
 
                       {amoStatus?.connected && (
                         <div className="admin-settings-block" style={{ marginTop: 24 }}>
+                          <div className="admin-divider" />
+                          <label className="admin-label">Воронки и стадии AmoCRM</label>
+                          
+                          {/* Load pipelines button */}
+                          <div className="admin-btn-group" style={{ marginBottom: 16 }}>
+                            <button
+                              className="admin-btn admin-btn--secondary"
+                              type="button"
+                              onClick={() => activeTenant && loadPipelines(activeTenant.id)}
+                              disabled={pipelinesLoading}
+                            >
+                              {pipelinesLoading ? 'Загрузка...' : '📥 Загрузить воронки'}
+                            </button>
+                          </div>
+                          
+                          {/* Pipeline selector */}
+                          {amoPipelines.length > 0 && (
+                            <div className="admin-settings-block">
+                              <label className="admin-label">Выберите воронку</label>
+                              <select
+                                className="admin-input"
+                                value={selectedPipelineId}
+                                onChange={(e) => {
+                                  setSelectedPipelineId(e.target.value)
+                                  if (e.target.value && activeTenant) {
+                                    loadStages(activeTenant.id, e.target.value)
+                                  }
+                                }}
+                              >
+                                <option value="">— Выберите воронку —</option>
+                                {amoPipelines.map(p => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name} {p.is_main ? '(основная)' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          
+                          {/* Stages list */}
+                          {stagesLoading && (
+                            <div className="admin-loading-panel" style={{ padding: 16 }}>
+                              <div className="admin-spinner admin-spinner--sm" />
+                              <span>Загрузка стадий...</span>
+                            </div>
+                          )}
+                          
+                          {!stagesLoading && amoStages.length > 0 && (
+                            <div className="admin-settings-block">
+                              <label className="admin-label">Стадии воронки</label>
+                              <div className="admin-stages-list">
+                                {amoStages.map(stage => (
+                                  <div key={stage.id} className="admin-stage-item">
+                                    <span className="admin-stage-name">{stage.name}</span>
+                                    <span className="admin-stage-id">ID: {stage.id}</span>
+                                    {stage.is_won && <span className="admin-badge admin-badge--ok">Won</span>}
+                                    {stage.is_lost && <span className="admin-badge admin-badge--off">Lost</span>}
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              <button
+                                className="admin-btn admin-btn--accent"
+                                type="button"
+                                onClick={handleAutoFillMapping}
+                                style={{ marginTop: 12 }}
+                              >
+                                ✨ Автозаполнить маппинг по названиям
+                              </button>
+                            </div>
+                          )}
+                          
+                          <div className="admin-divider" />
+                          
+                          {/* Mapping table */}
                           <label className="admin-label">Маппинг стадий</label>
                           <div className="admin-settings-hint" style={{ marginBottom: 12 }}>
                             Укажите ID стадий из вашей воронки AmoCRM для каждого статуса лида.
@@ -990,6 +1211,7 @@ const AdminTenants = () => {
                               <tr>
                                 <th>Статус лида</th>
                                 <th>Stage ID</th>
+                                <th>Быстрый выбор</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1009,6 +1231,27 @@ const AdminTenants = () => {
                                       }}
                                       placeholder="ID стадии"
                                     />
+                                  </td>
+                                  <td>
+                                    {amoStages.length > 0 && (
+                                      <select
+                                        className="admin-input admin-input--sm"
+                                        value={m.stage_id ?? ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value
+                                          setAmoMapping((prev) =>
+                                            prev.map((x, j) => (j === i ? { ...x, stage_id: val || null } : x))
+                                          )
+                                        }}
+                                      >
+                                        <option value="">—</option>
+                                        {amoStages.map(s => (
+                                          <option key={s.id} value={s.id}>
+                                            {s.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
                                   </td>
                                 </tr>
                               ))}

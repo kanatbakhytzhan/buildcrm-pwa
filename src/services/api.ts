@@ -1980,6 +1980,75 @@ export const saveAmoPipelineMapping = async (
   })
 }
 
+/* --- AmoCRM Pipelines & Stages --- */
+
+export type AmoPipeline = {
+  id: number | string
+  name: string
+  is_main?: boolean
+}
+
+export type AmoStage = {
+  id: number | string
+  name: string
+  pipeline_id: number | string
+  sort?: number
+  color?: string
+  is_won?: boolean   // Successful close
+  is_lost?: boolean  // Lost/rejected
+}
+
+export const getAmoPipelines = async (
+  tenantId: string | number,
+): Promise<AmoPipeline[]> => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/amocrm/pipelines`)
+  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  if (response.status === 404) return []
+  if (!response.ok) throw await buildError(response)
+  const data = await response.json()
+  return Array.isArray(data) ? (data as AmoPipeline[]) : 
+    (data as { pipelines?: AmoPipeline[] })?.pipelines ?? []
+}
+
+export const getAmoStages = async (
+  tenantId: string | number,
+  pipelineId?: string | number,
+): Promise<AmoStage[]> => {
+  let path = `/api/admin/tenants/${tenantId}/amocrm/stages`
+  if (pipelineId) path += `?pipeline_id=${pipelineId}`
+  const url = fullUrl(path)
+  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  if (response.status === 404) return []
+  if (!response.ok) throw await buildError(response)
+  const data = await response.json()
+  return Array.isArray(data) ? (data as AmoStage[]) : 
+    (data as { stages?: AmoStage[] })?.stages ?? []
+}
+
+/** Stage key to Russian name mapping for auto-fill */
+export const STAGE_NAME_TO_KEY: Record<string, string> = {
+  'неразобранное': 'unsorted',
+  'новый': 'new',
+  'в работе': 'in_progress',
+  '1-й звонок': 'call_1',
+  '1 звонок': 'call_1',
+  'первый звонок': 'call_1',
+  '2-й звонок': 'call_2',
+  '2 звонок': 'call_2',
+  'второй звонок': 'call_2',
+  '3-й звонок': 'call_3',
+  '3 звонок': 'call_3',
+  'третий звонок': 'call_3',
+  'ремонт не готов': 'repair_not_ready',
+  'другой город': 'other_city',
+  'игнор': 'ignore',
+  'назначен замер': 'measurement_assigned',
+  'провел замер': 'measurement_done',
+  'отказ после замера': 'after_measurement_reject',
+  'успешно реализовано': 'won',
+  'закрыто и не реализовано': 'lost',
+}
+
 /* --- Mute lead chat --- */
 
 export const muteLeadChat = async (
