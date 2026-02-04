@@ -35,12 +35,17 @@ body.admin-body {
   font-family: var(--admin-font);
   margin: 0;
   padding: 0;
+  width: 100%;
+  max-width: none;
 }
 
 /* Layout */
 .admin-layout {
   display: flex;
   min-height: 100vh;
+  width: 100%;
+  max-width: none;
+  margin: 0;
 }
 
 .admin-sidebar {
@@ -109,6 +114,30 @@ body.admin-body {
   .admin-main {
     padding: 16px;
   }
+
+  .admin-main {
+    padding: 16px;
+  }
+}
+
+/* Guaranteed Text Wrapping */
+.admin-page h1,
+.admin-page h2,
+.admin-page h3,
+.admin-page p,
+.admin-page button,
+.admin-page span,
+.admin-page div,
+.admin-layout h1,
+.admin-layout h2,
+.admin-layout h3,
+.admin-layout p {
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.admin-list-item {
+  white-space: normal;
 }
 
 /* Components */

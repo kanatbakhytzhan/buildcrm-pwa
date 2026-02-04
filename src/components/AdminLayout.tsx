@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { CRM_V2_ENABLED } from '../config/appConfig'
 import '../admin.css' // Import desktop admin styles
@@ -11,6 +12,12 @@ const AdminLayout = () => {
     logout()
     navigate('/admin/login')
   }
+
+  // Apply admin-body class to body
+  useEffect(() => {
+    document.body.classList.add('admin-body')
+    return () => document.body.classList.remove('admin-body')
+  }, [])
 
   return (
     <div className="admin-layout">
