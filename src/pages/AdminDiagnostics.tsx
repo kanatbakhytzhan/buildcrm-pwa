@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   getAdminDiagnosticsDb,
   getAdminTenants,
@@ -19,7 +18,6 @@ function formatJson(value: unknown): string {
 }
 
 const AdminDiagnostics = () => {
-  const navigate = useNavigate()
   const [tenants, setTenants] = useState<AdminTenant[]>([])
   const [output, setOutput] = useState<{ type: 'ok' | 'error'; data: unknown } | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
