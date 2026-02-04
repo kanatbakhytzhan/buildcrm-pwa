@@ -1851,6 +1851,7 @@ export type TenantSettings = {
   amocrm_domain?: string | null
   amocrm_base_domain?: string | null
   amocrm_expires_at?: string | null
+  _raw?: unknown // For diagnostics
 }
 
 /** Normalize backend response to flat TenantSettings structure */
@@ -1988,7 +1989,8 @@ export const getTenantSettings = async (
   console.log('[API] getTenantSettings raw response:', rawData)
 
   // Normalize the response structure
-  return normalizeTenantSettings(rawData, tenantId)
+  const normalized = normalizeTenantSettings(rawData, tenantId)
+  return { ...normalized, _raw: rawData }
 }
 
 export const updateTenantSettings = async (

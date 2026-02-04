@@ -126,7 +126,10 @@ const AdminTenants = () => {
   const [actionStatus, setActionStatus] = useState<'idle' | 'loading'>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
 
-  // WhatsApp test
+  // Diagnostics
+  const [lastCheck, setLastCheck] = useState<{ status: 'ok' | 'fail'; time: string; raw?: unknown } | null>(null)
+
+  // --- Data Loading ---
   const [waTestOpen, setWaTestOpen] = useState(false)
   const [waTestPhone, setWaTestPhone] = useState('')
   const [waTestMessage, setWaTestMessage] = useState('Тестовое сообщение от BuildCRM')
@@ -493,13 +496,32 @@ const AdminTenants = () => {
       const promptMatch = verifiedSettings?.ai_prompt === (payload.ai_prompt || verifiedSettings?.ai_prompt)
       const enabledMatch = verifiedSettings?.ai_enabled === payload.ai_enabled
 
+      // Explicit check for "Empty Response" bug
+      // If we sent a prompt but got back mismatch/null, and the raw response looks empty or weird
+      if (payload.ai_prompt && !promptMatch) {
+        console.error('[AdminTenants] Verification failed.', { sent: payload.ai_prompt, got: verifiedSettings?.ai_prompt, raw: verifiedSettings._raw })
+
+        // If raw object is missing keys or empty
+        const raw = verifiedSettings._raw as Record<string, unknown>
+        const isEmpty = !raw || Object.keys(raw).length === 0 || (raw.settings && Object.keys(raw.settings as object).length === 0)
+
+        if (isEmpty) {
+          setLastCheck({ status: 'fail', time: new Date().toLocaleTimeString(), raw: verifiedSettings._raw })
+          throw new Error('Сервер вернул пустые настройки. Проверь backend /tenant/settings')
+        }
+      }
+
       if (promptMatch && enabledMatch) {
         setSettings(safeSettings(verifiedSettings))
+        // Update ref to prevent "unsaved changes" warning if user closes
         settingsRef.current = safeSettings(verifiedSettings)
         setDirtyFields(new Set()) // Clear dirty only on success
+
+        setLastCheck({ status: 'ok', time: new Date().toLocaleTimeString() })
         showToast('Сохранено и проверено ✅')
       } else {
-        throw new Error('Данные отправлены, но проверка не прошла. Попробуйте снова.')
+        setLastCheck({ status: 'fail', time: new Date().toLocaleTimeString(), raw: verifiedSettings._raw })
+        throw new Error('Данные отправлены, но проверка не прошла (данные не совпадают).')
       }
 
       await loadTenants()
@@ -1176,6 +1198,33 @@ const AdminTenants = () => {
                     >
                       {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить'}
                     </button>
+
+                    {/* Diagnostics: Last Check Status */}
+                    {lastCheck && (
+                      <div style={{ marginTop: 12, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ color: lastCheck.status === 'ok' ? 'var(--admin-success-color)' : 'var(--admin-error-color)' }}>
+                          Последняя проверка: {lastCheck.status === 'ok' ? 'OK' : 'FAIL'} ({lastCheck.time})
+                        </span>
+
+                        {lastCheck.status === 'fail' && !!lastCheck.raw && (
+                          <button
+                            type="button"
+                            className="admin-btn-link"
+                            style={{ fontSize: 12 }}
+                            onClick={() => {
+                              navigator.clipboard.writeText(JSON.stringify({
+                                tenant_id: activeTenant.id,
+                                endpoint: `/api/admin/tenants/${activeTenant.id}/settings`,
+                                response: lastCheck.raw
+                              }, null, 2))
+                              showToast('JSON скопирован в буфер')
+                            }}
+                          >
+                            Скопировать диагностику
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
