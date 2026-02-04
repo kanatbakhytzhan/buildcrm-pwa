@@ -1197,6 +1197,86 @@ export const postTenantWhatsappBinding = async (
   }
 }
 
+/** Test WhatsApp: send a test message */
+export type WhatsAppTestResult = {
+  ok: boolean
+  message: string
+  details?: string
+  status?: number
+}
+
+export const testWhatsApp = async (
+  tenantId: string | number,
+  payload: { phone: string; message: string },
+): Promise<WhatsAppTestResult> => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/whatsapp/test`)
+  let response: Response
+  
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        phone: payload.phone.replace(/\D/g, ''),
+        message: payload.message || 'Тестовое сообщение',
+      }),
+    })
+  } catch (e) {
+    return {
+      ok: false,
+      message: 'Ошибка сети: не удалось отправить запрос',
+      details: e instanceof Error ? e.message : String(e),
+    }
+  }
+  
+  let data: Record<string, unknown> = {}
+  const text = await response.text()
+  if (text) {
+    try {
+      data = JSON.parse(text) as Record<string, unknown>
+    } catch {
+      data = { raw: text }
+    }
+  }
+  
+  // Handle auth errors specially
+  if (response.status === 401 || response.status === 403) {
+    return {
+      ok: false,
+      message: 'Вы не авторизованы. Перезайдите в систему.',
+      details: JSON.stringify(data, null, 2),
+      status: response.status,
+    }
+  }
+  
+  if (response.ok && data.ok !== false) {
+    return {
+      ok: true,
+      message: 'Сообщение отправлено!',
+      details: JSON.stringify(data, null, 2),
+    }
+  }
+  
+  // Extract error message
+  const errorMsg = typeof data.detail === 'string' 
+    ? data.detail 
+    : typeof data.message === 'string'
+      ? data.message
+      : typeof data.error === 'string'
+        ? data.error
+        : `Ошибка ${response.status}`
+  
+  return {
+    ok: false,
+    message: errorMsg,
+    details: JSON.stringify(data, null, 2),
+    status: response.status,
+  }
+}
+
 export const getTenantWhatsapps = async (
   tenantId: string | number,
 ): Promise<TenantWhatsapp[]> => {

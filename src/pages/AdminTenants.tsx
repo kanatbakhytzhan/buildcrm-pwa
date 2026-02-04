@@ -16,6 +16,7 @@ import {
   saveAmoPipelineMapping,
   selfCheckTenant,
   STAGE_NAME_TO_KEY,
+  testWhatsApp,
   updateTenantSettings,
   type AdminTenant,
   type AmoPipeline,
@@ -128,7 +129,7 @@ const AdminTenants = () => {
   const [waTestPhone, setWaTestPhone] = useState('')
   const [waTestMessage, setWaTestMessage] = useState('Тестовое сообщение от BuildCRM')
   const [waTestLoading, setWaTestLoading] = useState(false)
-  const [waTestResult, setWaTestResult] = useState<{ ok: boolean; message: string; details?: string } | null>(null)
+  const [waTestResult, setWaTestResult] = useState<{ ok: boolean; message: string; details?: string; status?: number } | null>(null)
   
   // Store original server values for WhatsApp to preserve masked tokens
   const [serverWhatsApp, setServerWhatsApp] = useState<{
@@ -139,6 +140,9 @@ const AdminTenants = () => {
     active?: boolean
     binding_exists?: boolean
   }>({})
+  
+  // Last loaded timestamp for refresh indicator
+  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null)
 
   // AmoCRM
   const [amoStatus, setAmoStatus] = useState<AmoStatus>({ connected: false })
@@ -305,6 +309,7 @@ const AdminTenants = () => {
           : defaultMapping
       )
       setDirtyFields(new Set())
+      setLastLoadedAt(new Date())
       setSettingsStatus('ready')
     } catch (err) {
       setSettingsError(getErrorMessage(err))
@@ -557,7 +562,7 @@ const AdminTenants = () => {
     }
   }
   
-  // WhatsApp Test
+  // WhatsApp Test - using proper authenticated API client
   const handleTestWhatsApp = async () => {
     if (!activeTenant) return
     if (!waTestPhone.trim()) {
@@ -568,45 +573,13 @@ const AdminTenants = () => {
     setWaTestLoading(true)
     setWaTestResult(null)
     
-    try {
-      const response = await fetch(
-        `${BASE_URL}/api/admin/tenants/${activeTenant.id}/whatsapp/test`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-          },
-          body: JSON.stringify({
-            phone: waTestPhone.replace(/\D/g, ''),
-            message: waTestMessage || 'Тестовое сообщение',
-          }),
-        }
-      )
-      
-      const data = await response.json()
-      
-      if (response.ok && data.ok !== false) {
-        setWaTestResult({
-          ok: true,
-          message: 'Сообщение отправлено!',
-          details: JSON.stringify(data, null, 2),
-        })
-      } else {
-        setWaTestResult({
-          ok: false,
-          message: data.detail || data.message || 'Ошибка отправки',
-          details: JSON.stringify(data, null, 2),
-        })
-      }
-    } catch (err) {
-      setWaTestResult({
-        ok: false,
-        message: getErrorMessage(err),
-      })
-    } finally {
-      setWaTestLoading(false)
-    }
+    const result = await testWhatsApp(activeTenant.id, {
+      phone: waTestPhone,
+      message: waTestMessage,
+    })
+    
+    setWaTestResult(result)
+    setWaTestLoading(false)
   }
 
   const handleSaveAmoDomain = async () => {
@@ -912,28 +885,45 @@ const AdminTenants = () => {
                 ×
               </button>
             </div>
-            <div className="admin-tabs">
-              <button
-                type="button"
-                className={`admin-tab ${activeTab === 'ai' ? 'admin-tab--active' : ''}`}
-                onClick={() => setActiveTab('ai')}
-              >
-                AI Настройки
-              </button>
-              <button
-                type="button"
-                className={`admin-tab ${activeTab === 'whatsapp' ? 'admin-tab--active' : ''}`}
-                onClick={() => setActiveTab('whatsapp')}
-              >
-                WhatsApp
-              </button>
-              <button
-                type="button"
-                className={`admin-tab ${activeTab === 'amocrm' ? 'admin-tab--active' : ''}`}
-                onClick={() => setActiveTab('amocrm')}
-              >
-                AmoCRM
-              </button>
+            <div className="admin-tabs-row">
+              <div className="admin-tabs">
+                <button
+                  type="button"
+                  className={`admin-tab ${activeTab === 'ai' ? 'admin-tab--active' : ''}`}
+                  onClick={() => setActiveTab('ai')}
+                >
+                  AI Настройки
+                </button>
+                <button
+                  type="button"
+                  className={`admin-tab ${activeTab === 'whatsapp' ? 'admin-tab--active' : ''}`}
+                  onClick={() => setActiveTab('whatsapp')}
+                >
+                  WhatsApp
+                </button>
+                <button
+                  type="button"
+                  className={`admin-tab ${activeTab === 'amocrm' ? 'admin-tab--active' : ''}`}
+                  onClick={() => setActiveTab('amocrm')}
+                >
+                  AmoCRM
+                </button>
+              </div>
+              <div className="admin-tabs-actions">
+                {lastLoadedAt && settingsStatus === 'ready' && (
+                  <span className="admin-loaded-at">
+                    Загружено: {lastLoadedAt.toLocaleTimeString('ru-RU')}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="admin-btn admin-btn--ghost admin-btn--sm"
+                  onClick={() => activeTenant && loadSettings(activeTenant.id)}
+                  disabled={settingsStatus === 'loading'}
+                >
+                  🔄 Обновить
+                </button>
+              </div>
             </div>
 
             <div className="admin-modal-body">
