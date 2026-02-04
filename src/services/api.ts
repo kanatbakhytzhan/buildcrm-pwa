@@ -53,20 +53,42 @@ function isNetworkFailure(e: unknown): boolean {
   return /failed to fetch|network error|cors|load failed/i.test(msg)
 }
 
+/** Retry fetch with exponential backoff for network errors (Render cold start) */
+async function fetchWithRetry(
+  url: string,
+  options?: RequestInit,
+  retries = 2,
+  delay = 2000,
+): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, options)
+      return response
+    } catch (e) {
+      const isLast = attempt === retries
+      if (isLast || !isNetworkFailure(e)) {
+        throw e
+      }
+      // Wait before retry (Render cold start can take 10-30s)
+      await new Promise((r) => setTimeout(r, delay * (attempt + 1)))
+    }
+  }
+  throw new Error('Network request failed after retries')
+}
+
 const request = async <T>(path: string, options?: RequestInit) => {
   const url = fullUrl(path)
   let response: Response
   try {
-    response = await fetch(url, options)
+    response = await fetchWithRetry(url, options)
   } catch (e) {
     if (import.meta.env.DEV) {
       console.error('[api] fetch failed', { url, method: options?.method ?? 'GET', error: e })
     }
     const msg = e instanceof Error ? e.message : String(e)
-    const detail = import.meta.env.DEV ? ` (${url})` : ''
     throw new Error(
       isNetworkFailure(e)
-        ? `Сетевая ошибка: проверьте CORS и URL API${detail}`
+        ? 'Сервер не отвечает. Возможно, идёт запуск (до 30 сек). Обновите страницу.'
         : msg
     ) as ApiError
   }
