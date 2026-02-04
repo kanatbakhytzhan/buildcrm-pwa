@@ -13,7 +13,6 @@ import Profile from './pages/Profile'
 import AdminLogin from './pages/AdminLogin'
 import AdminUsers from './pages/AdminUsers'
 import AdminTenants from './pages/AdminTenants'
-import AdminDiagnostics from './pages/AdminDiagnostics'
 import AdminCheck from './pages/AdminCheck'
 import LeadsTableV2 from './pages/LeadsTableV2'
 import PipelinePage from './pages/PipelinePage'
@@ -22,6 +21,7 @@ import ReportsPage from './pages/v3/ReportsPage'
 import ImportPage from './pages/v3/ImportPage'
 import AutoAssignPage from './pages/v3/AutoAssignPage'
 import V2Layout from './components/V2Layout'
+import AdminLayout from './components/AdminLayout'
 import { CRM_V2_ENABLED } from './config/appConfig'
 
 const AppLayout = () => {
@@ -44,16 +44,6 @@ const RequireAuth = () => {
     return <Navigate to="/login" replace />
   }
   return <AppLayout />
-}
-
-const AdminLayout = () => {
-  return (
-    <div className="app-shell">
-      <main className="app-content">
-        <Outlet />
-      </main>
-    </div>
-  )
 }
 
 const RequireAdminAuth = () => {
@@ -88,10 +78,10 @@ const App = () => {
         <Route path="/profile" element={<Profile />} />
         <Route path="/hot" element={<HotLeads />} />
       </Route>
+      {/* Admin routes with desktop sidebar layout */}
       <Route element={<RequireAdminAuth />}>
-        <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/tenants" element={<AdminTenants />} />
-        <Route path="/admin/diagnostics" element={<AdminDiagnostics />} />
+        <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/check" element={<AdminCheck />} />
         {CRM_V2_ENABLED && (
           <>

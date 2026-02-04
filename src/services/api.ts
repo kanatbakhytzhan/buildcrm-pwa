@@ -1722,3 +1722,97 @@ export const getAdminTenantSnapshot = async (
     headers: { ...authHeaders() },
   })
 }
+
+/* --- Self-check tenant --- */
+
+export type SelfCheckItem = {
+  key: string
+  label: string
+  ok: boolean
+  message?: string
+  action?: 'open_ai' | 'open_whatsapp' | 'open_amocrm' | 'reconnect_amo'
+}
+
+export type SelfCheckResult = {
+  tenant_id: string | number
+  tenant_name?: string
+  checks: SelfCheckItem[]
+  all_ok: boolean
+}
+
+export const selfCheckTenant = async (
+  tenantId: string | number,
+): Promise<SelfCheckResult> => {
+  const url = fullUrl(`/api/admin/tenants/${tenantId}/self-check`)
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({}),
+  })
+  if (response.status === 404) {
+    // fallback: build checks from settings
+    const settings = await getTenantSettings(tenantId).catch(() => null)
+    const amoStatus = await getAmoStatus(tenantId).catch(() => ({ connected: false }))
+    const checks: SelfCheckItem[] = []
+    
+    checks.push({
+      key: 'tenant_active',
+      label: 'Tenant активен',
+      ok: true,
+      message: 'Клиент существует',
+    })
+    
+    checks.push({
+      key: 'ai_enabled',
+      label: 'AI включён',
+      ok: settings?.ai_enabled !== false,
+      message: settings?.ai_enabled !== false ? 'AI-менеджер работает' : 'AI выключен — бот не отвечает',
+      action: settings?.ai_enabled === false ? 'open_ai' : undefined,
+    })
+    
+    checks.push({
+      key: 'ai_prompt',
+      label: 'AI prompt заполнен',
+      ok: Boolean(settings?.ai_prompt?.trim()),
+      message: settings?.ai_prompt?.trim() ? 'Инструкция задана' : 'Нет AI инструкции — бот работает по умолчанию',
+      action: !settings?.ai_prompt?.trim() ? 'open_ai' : undefined,
+    })
+    
+    const waSource = settings?.whatsapp_source ?? 'chatflow'
+    if (waSource === 'chatflow') {
+      const hasChatflow = Boolean(settings?.chatflow_token?.trim() && settings?.chatflow_instance_id?.trim())
+      checks.push({
+        key: 'whatsapp_linked',
+        label: 'WhatsApp привязан',
+        ok: hasChatflow,
+        message: hasChatflow ? 'ChatFlow настроен' : 'Нет привязки ChatFlow — бот не может отвечать',
+        action: !hasChatflow ? 'open_whatsapp' : undefined,
+      })
+    } else {
+      checks.push({
+        key: 'whatsapp_linked',
+        label: 'WhatsApp (AmoCRM)',
+        ok: true,
+        message: 'Используется AmoCRM Marketplace',
+      })
+    }
+    
+    checks.push({
+      key: 'amocrm_connected',
+      label: 'AmoCRM подключён',
+      ok: amoStatus.connected,
+      message: amoStatus.connected ? `Домен: ${(amoStatus as AmoStatus).domain ?? '—'}` : 'AmoCRM не подключён',
+      action: !amoStatus.connected ? 'reconnect_amo' : undefined,
+    })
+    
+    return {
+      tenant_id: tenantId,
+      tenant_name: settings?.name ?? undefined,
+      checks,
+      all_ok: checks.every((c) => c.ok),
+    }
+  }
+  if (!response.ok) throw await buildError(response)
+  const data = await response.json()
+  return data as SelfCheckResult
+}
