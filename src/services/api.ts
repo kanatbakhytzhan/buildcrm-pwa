@@ -1569,11 +1569,14 @@ export type TenantSettings = {
   ai_after_submit_behavior?: string | null
   whatsapp_source?: 'chatflow' | 'amomarket' | null
   chatflow_token?: string | null
+  chatflow_token_masked?: string | null
   chatflow_instance_id?: string | null
   chatflow_phone_number?: string | null
   chatflow_active?: boolean
+  chatflow_binding_exists?: boolean
   amocrm_connected?: boolean
   amocrm_domain?: string | null
+  amocrm_base_domain?: string | null
   amocrm_expires_at?: string | null
 }
 
@@ -1583,12 +1586,21 @@ export const getTenantSettings = async (
   const url = fullUrl(`/api/admin/tenants/${tenantId}/settings`)
   const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
   if (response.status === 404) {
-    // fallback: try to get from tenant + whatsapp binding
-    const tenant = await request<unknown>(`/api/admin/tenants/${tenantId}`, {
-      method: 'GET',
-      headers: { ...authHeaders() },
-    }) as AdminTenant | null
-    const binding = await getTenantWhatsappBinding(tenantId).catch(() => ({}))
+    // fallback: try to get from tenant + whatsapp binding + amo status
+    const [tenantRes, bindingRes, amoRes] = await Promise.all([
+      request<unknown>(`/api/admin/tenants/${tenantId}`, {
+        method: 'GET',
+        headers: { ...authHeaders() },
+      }).catch(() => null),
+      getTenantWhatsappBinding(tenantId).catch(() => ({})),
+      getAmoStatus(tenantId).catch(() => ({ connected: false })),
+    ])
+    const tenant = tenantRes as AdminTenant | null
+    const binding = bindingRes as TenantWhatsappBinding
+    const amo = amoRes as AmoStatus
+    const tokenVal = binding.token ?? null
+    const hasToken = Boolean(tokenVal?.trim())
+    const hasInstance = Boolean(binding.instance_id?.trim())
     return {
       id: tenant?.id,
       name: tenant?.name,
@@ -1596,18 +1608,25 @@ export const getTenantSettings = async (
       ai_prompt: tenant?.ai_prompt ?? null,
       ai_after_submit_behavior: 'polite_close',
       whatsapp_source: (tenant as Record<string, unknown>)?.whatsapp_source as TenantSettings['whatsapp_source'] ?? 'chatflow',
-      chatflow_token: (binding as TenantWhatsappBinding).token ?? null,
-      chatflow_instance_id: (binding as TenantWhatsappBinding).instance_id ?? null,
-      chatflow_phone_number: (binding as TenantWhatsappBinding).phone_number ?? null,
-      chatflow_active: (binding as TenantWhatsappBinding).active !== false,
-      amocrm_connected: false,
-      amocrm_domain: null,
-      amocrm_expires_at: null,
+      chatflow_token: tokenVal,
+      chatflow_token_masked: hasToken ? `${tokenVal!.slice(0, 20)}...` : null,
+      chatflow_instance_id: binding.instance_id ?? null,
+      chatflow_phone_number: binding.phone_number ?? null,
+      chatflow_active: binding.active !== false,
+      chatflow_binding_exists: hasToken && hasInstance,
+      amocrm_connected: amo.connected,
+      amocrm_domain: amo.domain ?? null,
+      amocrm_base_domain: (tenant as Record<string, unknown>)?.amocrm_base_domain as string | null ?? null,
+      amocrm_expires_at: amo.expires_at ?? null,
     }
   }
   if (!response.ok) throw await buildError(response)
-  const data = await response.json()
-  return data as TenantSettings
+  const data = await response.json() as TenantSettings
+  // Ensure binding_exists is computed if not provided
+  if (data.chatflow_binding_exists === undefined) {
+    data.chatflow_binding_exists = Boolean(data.chatflow_token?.trim() && data.chatflow_instance_id?.trim())
+  }
+  return data
 }
 
 export const updateTenantSettings = async (
@@ -1650,12 +1669,29 @@ export type AmoStatus = {
 
 export const getAmoAuthUrl = async (
   tenantId: string | number,
+  baseDomain?: string,
 ): Promise<{ url: string }> => {
-  const data = await request<unknown>(`/api/admin/tenants/${tenantId}/amocrm/auth-url`, {
-    method: 'GET',
-    headers: { ...authHeaders() },
-  })
-  return { url: (data as { url?: string })?.url ?? '' }
+  const params = new URLSearchParams()
+  if (baseDomain) params.set('base_domain', baseDomain)
+  const queryStr = params.toString()
+  const path = `/api/admin/tenants/${tenantId}/amocrm/auth-url${queryStr ? `?${queryStr}` : ''}`
+  const url = fullUrl(path)
+  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  if (!response.ok) {
+    const text = await response.text()
+    let detail = text
+    try {
+      const j = JSON.parse(text) as { detail?: unknown; message?: string }
+      detail = typeof j.detail === 'string' ? j.detail : (j.message ?? JSON.stringify(j.detail ?? j))
+    } catch {
+      // keep text
+    }
+    const err = new Error(detail) as Error & { status?: number }
+    err.status = response.status
+    throw err
+  }
+  const data = await response.json()
+  return { url: (data as { url?: string; auth_url?: string })?.url ?? (data as { auth_url?: string })?.auth_url ?? '' }
 }
 
 export const getAmoStatus = async (

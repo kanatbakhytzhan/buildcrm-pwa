@@ -3186,6 +3186,19 @@ a {
   line-height: 1.5;
 }
 
+/* Admin Form Grid (2-column on desktop) */
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+}
+
+@media (max-width: 768px) {
+  .admin-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .admin-label {
   font-size: 14px;
   font-weight: 600;

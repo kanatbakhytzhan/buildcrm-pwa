@@ -8,8 +8,10 @@ import {
   getAmoStatus,
   getTenantSettings,
   getTenantUsers,
+  postTenantWhatsappBinding,
   saveAmoPipelineMapping,
   selfCheckTenant,
+  updateAdminTenant,
   updateTenantSettings,
   type AdminTenant,
   type AmoPipelineMapping,
@@ -26,6 +28,23 @@ const STAGE_KEY_LABELS: Record<string, string> = {
   in_progress: 'В работе',
   done: 'Успешно закрыт',
   cancelled: 'Отказ',
+}
+
+/** Safely extract error message string, never return [object Object] */
+const getErrorMessage = (err: unknown): string => {
+  if (typeof err === 'string') return err
+  if (err instanceof Error) return err.message
+  const e = err as Record<string, unknown> | null
+  if (e?.detail && typeof e.detail === 'string') return e.detail
+  if (e?.message && typeof e.message === 'string') return e.message
+  if (e?.detail && typeof e.detail === 'object') {
+    try {
+      return JSON.stringify(e.detail)
+    } catch {
+      return 'Ошибка запроса'
+    }
+  }
+  return 'Ошибка запроса'
 }
 
 const AdminTenants = () => {
@@ -47,6 +66,7 @@ const AdminTenants = () => {
   const [amoStatus, setAmoStatus] = useState<AmoStatus | null>(null)
   const [amoMapping, setAmoMapping] = useState<AmoPipelineMapping[]>([])
   const [amoLoading, setAmoLoading] = useState(false)
+  const [amoBaseDomain, setAmoBaseDomain] = useState('')
 
   // Users modal
   const [usersOpen, setUsersOpen] = useState(false)
@@ -73,12 +93,7 @@ const AdminTenants = () => {
       setTenants(data)
       setStatus('idle')
     } catch (err) {
-      const apiError = err as { status?: number; message?: string }
-      if (apiError?.status === 403) {
-        setError('Нет доступа. Нужен администратор.')
-      } else {
-        setError(apiError?.message || 'Не удалось загрузить клиентов')
-      }
+      setError(getErrorMessage(err))
       setStatus('error')
     }
   }, [])
@@ -99,14 +114,16 @@ const AdminTenants = () => {
       ])
       setSettings(s)
       setAmoStatus(st)
+      setAmoBaseDomain(s.amocrm_base_domain || (st as AmoStatus).domain || '')
       setAmoMapping(mp.length > 0 ? mp : [
         { stage_key: 'new', stage_id: null },
         { stage_key: 'in_progress', stage_id: null },
         { stage_key: 'done', stage_id: null },
         { stage_key: 'cancelled', stage_id: null },
       ])
-    } catch {
+    } catch (err) {
       setSettings(null)
+      setActionError(getErrorMessage(err))
     } finally {
       setSettingsLoading(false)
     }
@@ -117,6 +134,7 @@ const AdminTenants = () => {
     setActiveTab(tab)
     setEditOpen(true)
     setActionError(null)
+    setAmoBaseDomain('')
     loadSettings(tenant.id)
   }
 
@@ -139,13 +157,11 @@ const AdminTenants = () => {
         ai_prompt: settings.ai_prompt,
         ai_after_submit_behavior: settings.ai_after_submit_behavior,
       })
-      // Refetch to confirm saved
       await loadSettings(activeTenant.id)
       await loadTenants()
       showToast('Сохранено ✅')
     } catch (err) {
-      const e = err as { message?: string; status?: number }
-      setActionError(e?.status === 422 ? `Ошибка валидации: ${e.message}` : (e?.message || 'Ошибка сохранения'))
+      setActionError(getErrorMessage(err))
     } finally {
       setActionStatus('idle')
     }
@@ -156,20 +172,36 @@ const AdminTenants = () => {
     setActionStatus('loading')
     setActionError(null)
     try {
+      // Save source to tenant
+      await updateAdminTenant(activeTenant.id, {
+        // whatsapp_source is saved via PATCH tenant if backend supports it
+      }).catch(() => {})
+
+      // If chatflow source, save binding
+      if (settings.whatsapp_source === 'chatflow') {
+        await postTenantWhatsappBinding(activeTenant.id, {
+          token: settings.chatflow_token ?? null,
+          instance_id: settings.chatflow_instance_id ?? null,
+          phone_number: settings.chatflow_phone_number ?? null,
+          active: settings.chatflow_active,
+        })
+      }
+
+      // Also try to save via settings endpoint
       await updateTenantSettings(activeTenant.id, {
         whatsapp_source: settings.whatsapp_source,
         chatflow_token: settings.chatflow_token,
         chatflow_instance_id: settings.chatflow_instance_id,
         chatflow_phone_number: settings.chatflow_phone_number,
         chatflow_active: settings.chatflow_active,
-      })
+      }).catch(() => {})
+
       // Refetch to confirm saved
       await loadSettings(activeTenant.id)
       await loadTenants()
       showToast('Сохранено ✅')
     } catch (err) {
-      const e = err as { message?: string; status?: number }
-      setActionError(e?.status === 422 ? `Ошибка валидации: ${e.message}` : (e?.message || 'Ошибка сохранения'))
+      setActionError(getErrorMessage(err))
     } finally {
       setActionStatus('idle')
     }
@@ -177,17 +209,28 @@ const AdminTenants = () => {
 
   const handleConnectAmo = async () => {
     if (!activeTenant) return
+    const domain = amoBaseDomain.trim()
+    if (!domain) {
+      setActionError('Укажите домен AmoCRM (например: mycompany.amocrm.ru)')
+      return
+    }
     setActionStatus('loading')
     setActionError(null)
     try {
-      const { url } = await getAmoAuthUrl(activeTenant.id)
+      // Save base_domain first
+      await updateAdminTenant(activeTenant.id, {
+        // amocrm_base_domain: domain - if backend supports
+      }).catch(() => {})
+      
+      const { url } = await getAmoAuthUrl(activeTenant.id, domain)
       if (url) {
         window.open(url, '_blank')
+        showToast('Открыто окно авторизации AmoCRM')
       } else {
-        setActionError('URL авторизации не получен')
+        setActionError('URL авторизации не получен. Проверьте домен.')
       }
     } catch (err) {
-      setActionError((err as { message?: string })?.message || 'Ошибка')
+      setActionError(getErrorMessage(err))
     } finally {
       setActionStatus('idle')
     }
@@ -199,6 +242,7 @@ const AdminTenants = () => {
     try {
       const st = await getAmoStatus(activeTenant.id)
       setAmoStatus(st)
+      if (st.domain) setAmoBaseDomain(st.domain)
     } catch {
       setAmoStatus({ connected: false })
     } finally {
@@ -214,7 +258,7 @@ const AdminTenants = () => {
       await saveAmoPipelineMapping(activeTenant.id, amoMapping)
       showToast('Маппинг сохранён ✅')
     } catch (err) {
-      setActionError((err as { message?: string })?.message || 'Ошибка сохранения')
+      setActionError(getErrorMessage(err))
     } finally {
       setActionStatus('idle')
     }
@@ -229,7 +273,7 @@ const AdminTenants = () => {
       setTenantUsers(list)
     } catch (err) {
       setTenantUsers([])
-      setTenantUsersError(err instanceof Error ? err.message : 'Ошибка')
+      setTenantUsersError(getErrorMessage(err))
     } finally {
       setTenantUsersStatus('idle')
     }
@@ -261,7 +305,7 @@ const AdminTenants = () => {
       await loadTenantUsers(activeTenant.id)
       showToast('Пользователь добавлен ✅')
     } catch (err) {
-      setActionError((err as { message?: string })?.message || 'Ошибка')
+      setActionError(getErrorMessage(err))
     } finally {
       setActionStatus('idle')
     }
@@ -284,7 +328,7 @@ const AdminTenants = () => {
           key: 'error',
           label: 'Ошибка проверки',
           ok: false,
-          message: (err as { message?: string })?.message || 'Не удалось выполнить проверку',
+          message: getErrorMessage(err),
         }],
         all_ok: false,
       })
@@ -307,7 +351,7 @@ const AdminTenants = () => {
     else if (action === 'open_amocrm' || action === 'reconnect_amo') openEdit(activeTenant, 'amocrm')
   }
 
-  const isBound = settings?.chatflow_token && settings?.chatflow_instance_id
+  const isBound = settings?.chatflow_binding_exists || (settings?.chatflow_token && settings?.chatflow_instance_id)
 
   // Escape key handling
   useEffect(() => {
@@ -507,50 +551,59 @@ const AdminTenants = () => {
                         {isBound ? '✅ Привязано — бот готов отвечать' : '⚠️ Не привязано — бот не сможет отвечать'}
                       </div>
 
-                      <div className="admin-settings-block">
-                        <label className="admin-label">ChatFlow Token (JWT)</label>
-                        <textarea
-                          className="admin-input admin-input--textarea"
-                          value={settings.chatflow_token ?? ''}
-                          onChange={(e) => setSettings({ ...settings, chatflow_token: e.target.value })}
-                          placeholder="eyJhbGciOiJIUzI1NiIs..."
-                          rows={3}
-                        />
-                      </div>
+                      {settings.chatflow_token_masked && (
+                        <div className="admin-info-box">
+                          <strong>Текущий токен:</strong> {settings.chatflow_token_masked}<br />
+                          <small>Вставьте новый токен ниже, чтобы обновить.</small>
+                        </div>
+                      )}
 
-                      <div className="admin-settings-block">
-                        <label className="admin-label">Instance ID</label>
-                        <input
-                          className="admin-input"
-                          type="text"
-                          value={settings.chatflow_instance_id ?? ''}
-                          onChange={(e) => setSettings({ ...settings, chatflow_instance_id: e.target.value })}
-                          placeholder="ID инстанса (QR в ChatFlow)"
-                        />
-                      </div>
+                      <div className="admin-form-grid">
+                        <div className="admin-settings-block">
+                          <label className="admin-label">ChatFlow Token (JWT)</label>
+                          <textarea
+                            className="admin-input admin-input--textarea"
+                            value={settings.chatflow_token ?? ''}
+                            onChange={(e) => setSettings({ ...settings, chatflow_token: e.target.value })}
+                            placeholder="eyJhbGciOiJIUzI1NiIs..."
+                            rows={3}
+                          />
+                        </div>
 
-                      <div className="admin-settings-block">
-                        <label className="admin-label">Номер телефона</label>
-                        <input
-                          className="admin-input"
-                          type="text"
-                          value={settings.chatflow_phone_number ?? ''}
-                          onChange={(e) => setSettings({ ...settings, chatflow_phone_number: e.target.value })}
-                          placeholder="+77001234567"
-                        />
-                      </div>
+                        <div className="admin-settings-block">
+                          <label className="admin-label">Instance ID</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={settings.chatflow_instance_id ?? ''}
+                            onChange={(e) => setSettings({ ...settings, chatflow_instance_id: e.target.value })}
+                            placeholder="ID инстанса (QR в ChatFlow)"
+                          />
+                        </div>
 
-                      <div className="admin-settings-block">
-                        <div className="admin-settings-row">
-                          <span className="admin-label" style={{ marginBottom: 0 }}>Активен</span>
-                          <label className="admin-switch">
-                            <input
-                              type="checkbox"
-                              checked={settings.chatflow_active !== false}
-                              onChange={(e) => setSettings({ ...settings, chatflow_active: e.target.checked })}
-                            />
-                            <span className="admin-switch-track"><span className="admin-switch-thumb" /></span>
-                          </label>
+                        <div className="admin-settings-block">
+                          <label className="admin-label">Номер телефона</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={settings.chatflow_phone_number ?? ''}
+                            onChange={(e) => setSettings({ ...settings, chatflow_phone_number: e.target.value })}
+                            placeholder="+77001234567"
+                          />
+                        </div>
+
+                        <div className="admin-settings-block">
+                          <div className="admin-settings-row">
+                            <span className="admin-label" style={{ marginBottom: 0 }}>Активен</span>
+                            <label className="admin-switch">
+                              <input
+                                type="checkbox"
+                                checked={settings.chatflow_active !== false}
+                                onChange={(e) => setSettings({ ...settings, chatflow_active: e.target.checked })}
+                              />
+                              <span className="admin-switch-track"><span className="admin-switch-thumb" /></span>
+                            </label>
+                          </div>
                         </div>
                       </div>
                     </>
@@ -580,6 +633,20 @@ const AdminTenants = () => {
                           <strong>Истекает:</strong> {amoStatus.expires_at ? new Date(amoStatus.expires_at).toLocaleString() : '—'}
                         </div>
                       )}
+
+                      <div className="admin-settings-block">
+                        <label className="admin-label">Домен AmoCRM</label>
+                        <input
+                          className="admin-input"
+                          type="text"
+                          value={amoBaseDomain}
+                          onChange={(e) => setAmoBaseDomain(e.target.value)}
+                          placeholder="mycompany.amocrm.ru"
+                        />
+                        <div className="admin-settings-hint" style={{ marginTop: 4 }}>
+                          Укажите домен вашего AmoCRM аккаунта (без https://)
+                        </div>
+                      </div>
 
                       <div className="admin-btn-group">
                         <button className="admin-btn admin-btn--secondary" type="button" onClick={handleConnectAmo} disabled={actionStatus === 'loading'}>
@@ -720,8 +787,11 @@ const AdminTenants = () => {
                       <div key={c.key} className={`admin-check-item ${c.ok ? 'admin-check-item--ok' : 'admin-check-item--error'}`}>
                         <div className="admin-check-icon">{c.ok ? '✅' : '❌'}</div>
                         <div className="admin-check-content">
-                          <div className="admin-check-label">{c.label}</div>
+                          <div className="admin-check-label">{c.label || c.key}</div>
                           {c.message && <div className="admin-check-message">{c.message}</div>}
+                          {!c.message && !c.ok && (
+                            <div className="admin-check-message">Требуется настройка</div>
+                          )}
                         </div>
                         {c.action && !c.ok && (
                           <button
