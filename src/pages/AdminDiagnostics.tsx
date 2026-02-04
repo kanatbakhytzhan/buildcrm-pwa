@@ -115,146 +115,149 @@ const AdminDiagnostics = () => {
   }
 
   return (
-    <div className="page-stack">
-      <div className="page-header">
-        <div className="page-header__text">
-          <h1 className="title">Диагностика</h1>
-          <p className="subtitle">Проверка таблиц, smoke test, AI prompt, mute</p>
-        </div>
-        <div className="action-card">
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => navigate('/admin/tenants')}
-          >
-            Клиенты
-          </button>
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => navigate('/admin/users')}
-          >
-            Пользователи
-          </button>
+    <div className="admin-container">
+      <div className="admin-page-header">
+        <div>
+          <h1 className="admin-page-title">Диагностика</h1>
+          <p className="admin-page-subtitle">Проверка таблиц, smoke test, AI prompt, mute</p>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-title">Запустить проверку таблиц</div>
-        <p className="info-text" style={{ marginBottom: 12 }}>
-          GET /api/admin/diagnostics/db
-        </p>
-        <button
-          type="button"
-          className="primary-button"
-          disabled={dbLoading || loading !== null}
-          onClick={runDb}
-        >
-          {dbLoading ? 'Запрос…' : 'Проверить таблицы'}
-        </button>
-      </div>
+      <div className="admin-grid-2">
+        {/* DB Check */}
+        <div className="card admin-settings-block">
+          <div className="card-title">1. Проверка таблиц (DB)</div>
+          <p className="info-text">
+            GET /api/admin/diagnostics/db
+          </p>
+          <button
+            type="button"
+            className="admin-btn admin-btn--primary"
+            disabled={dbLoading || loading !== null}
+            onClick={runDb}
+          >
+            {dbLoading ? 'Запрос…' : 'Проверить таблицы'}
+          </button>
+        </div>
 
-      <div className="card">
-        <div className="card-title">Smoke test</div>
-        <p className="info-text" style={{ marginBottom: 12 }}>
-          POST /api/admin/diagnostics/smoke-test
-        </p>
-        <button
-          type="button"
-          className="primary-button"
-          disabled={smokeLoading || loading !== null}
-          onClick={runSmoke}
-        >
-          {smokeLoading ? 'Запрос…' : 'Smoke test'}
-        </button>
-      </div>
+        {/* Smoke Test */}
+        <div className="card admin-settings-block">
+          <div className="card-title">2. Smoke Check</div>
+          <p className="info-text">
+            POST /api/admin/diagnostics/smoke-test
+          </p>
+          <button
+            type="button"
+            className="admin-btn admin-btn--primary"
+            disabled={smokeLoading || loading !== null}
+            onClick={runSmoke}
+          >
+            {smokeLoading ? 'Запрос…' : 'Smoke test'}
+          </button>
+        </div>
 
-      <div className="card">
-        <div className="card-title">Проверить AI prompt tenant</div>
-        <p className="info-text" style={{ marginBottom: 12 }}>
-          Tenant + сообщение для проверки ответа AI
-        </p>
-        <div className="form-grid">
-          <label className="field">
-            <span className="field-label">Клиент (tenant)</span>
-            <select
-              className="field-input"
-              value={aiTenantId}
-              onChange={(e) => setAiTenantId(e.target.value)}
+        {/* AI Check */}
+        <div className="card admin-settings-block">
+          <div className="card-title">3. Проверить AI ответ</div>
+          <div className="admin-form-grid">
+            <label className="admin-label">
+              Клиент (tenant)
+              <select
+                className="admin-input"
+                value={aiTenantId}
+                onChange={(e) => setAiTenantId(e.target.value)}
+              >
+                <option value="">— Выберите —</option>
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-label">
+              Сообщение
+              <input
+                className="admin-input"
+                type="text"
+                value={aiMessage}
+                onChange={(e) => setAiMessage(e.target.value)}
+                placeholder="Текст для проверки"
+              />
+            </label>
+            <button
+              type="button"
+              className="admin-btn admin-btn--primary"
+              disabled={!aiTenantId || aiLoading || loading !== null}
+              onClick={runCheckAi}
             >
-              <option value="">— Выберите —</option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Сообщение (message)</span>
-            <input
-              className="field-input"
-              type="text"
-              value={aiMessage}
-              onChange={(e) => setAiMessage(e.target.value)}
-              placeholder="Текст для проверки ответа"
-            />
-          </label>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={!aiTenantId || aiLoading || loading !== null}
-            onClick={runCheckAi}
-          >
-            {aiLoading ? 'Запрос…' : 'Проверить'}
-          </button>
+              {aiLoading ? 'Запрос…' : 'Проверить AI'}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="card">
-        <div className="card-title">Проверить mute</div>
-        <p className="info-text" style={{ marginBottom: 12 }}>
-          Tenant + chat_key для проверки статуса mute
-        </p>
-        <div className="form-grid">
-          <label className="field">
-            <span className="field-label">Клиент (tenant)</span>
-            <select
-              className="field-input"
-              value={muteTenantId}
-              onChange={(e) => setMuteTenantId(e.target.value)}
+        {/* Mute Check */}
+        <div className="card admin-settings-block">
+          <div className="card-title">4. Проверить Mute</div>
+          <div className="admin-form-grid">
+            <label className="admin-label">
+              Клиент (tenant)
+              <select
+                className="admin-input"
+                value={muteTenantId}
+                onChange={(e) => setMuteTenantId(e.target.value)}
+              >
+                <option value="">— Выберите —</option>
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-label">
+              Chat Key
+              <input
+                className="admin-input"
+                type="text"
+                value={muteChatKey}
+                onChange={(e) => setMuteChatKey(e.target.value)}
+                placeholder="Ключ чата"
+              />
+            </label>
+            <button
+              type="button"
+              className="admin-btn admin-btn--primary"
+              disabled={!muteTenantId || muteLoading || loading !== null}
+              onClick={runCheckMute}
             >
-              <option value="">— Выберите —</option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Chat key</span>
-            <input
-              className="field-input"
-              type="text"
-              value={muteChatKey}
-              onChange={(e) => setMuteChatKey(e.target.value)}
-              placeholder="Ключ чата"
-            />
-          </label>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={!muteTenantId || muteLoading || loading !== null}
-            onClick={runCheckMute}
-          >
-            {muteLoading ? 'Запрос…' : 'Проверить'}
-          </button>
+              {muteLoading ? 'Запрос…' : 'Проверить Mute'}
+            </button>
+          </div>
         </div>
       </div>
 
       {output && (
-        <div className={`card admin-diagnostics-output admin-diagnostics-output--${output.type}`}>
-          <div className="card-title">
-            {output.type === 'ok' ? 'Ответ' : 'Ошибка'}
+        <div className={`card admin-diagnostics-output ${output.type === 'ok' ? 'ok' : 'error'}`} style={{ marginTop: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 className="admin-subtitle" style={{ margin: 0 }}>
+              {output.type === 'ok' ? '✅ Успешно' : '❌ Ошибка'}
+            </h3>
+            <button
+              className="admin-btn admin-btn--sm admin-btn--secondary"
+              onClick={() => {
+                navigator.clipboard.writeText(JSON.stringify(output.data, null, 2))
+                alert('JSON скопирован')
+              }}
+            >
+              📋 Copy JSON
+            </button>
           </div>
-          <pre className="admin-diagnostics-json">
+          <pre className="admin-diagnostics-json" style={{
+            background: '#1e293b',
+            color: '#e2e8f0',
+            padding: 16,
+            borderRadius: 8,
+            overflow: 'auto',
+            fontSize: 12,
+            maxHeight: 400
+          }}>
             {formatJson(output.data)}
           </pre>
         </div>

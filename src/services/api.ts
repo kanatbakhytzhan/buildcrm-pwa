@@ -21,8 +21,8 @@ export type DetailedApiError = {
 /** Map technical error messages to human-readable ones */
 function humanizeError(msg: string): string {
   // Network errors
-  if (/failed to fetch|network|cors|load failed|timeout/i.test(msg)) {
-    return 'Ошибка сети: сервер недоступен или CORS. Попробуйте обновить страницу.'
+  if (/failed to fetch|network|cors|load failed|timeout|connection refused/i.test(msg)) {
+    return 'Ошибка сети: сервер недоступен (Backend Down) или проблема CORS. Проверьте соединение или VPN.'
   }
   // Database errors
   if (/programmingerror|sqlalchemy|psycopg|database|relation.*does not exist/i.test(msg)) {
@@ -30,15 +30,19 @@ function humanizeError(msg: string): string {
   }
   // Auth errors
   if (/unauthorized|401|invalid.*token|expired/i.test(msg)) {
-    return 'Сессия истекла. Войдите снова.'
+    return 'Сессия истекла или токен невалиден (401). Войдите снова.'
   }
   // Permission errors
   if (/forbidden|403|access.*denied|permission/i.test(msg)) {
-    return 'Недостаточно прав для этого действия.'
+    return 'Недостаточно прав (403).'
   }
   // Validation errors
   if (/validation|422|invalid.*value|required/i.test(msg)) {
-    return msg // Keep validation errors as-is, they're usually clear
+    return `Ошибка валидации: ${msg}`
+  }
+  // Not found
+  if (/404|not found/i.test(msg)) {
+    return 'Ресурс не найден (404).'
   }
   return msg
 }
