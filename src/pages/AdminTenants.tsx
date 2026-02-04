@@ -15,6 +15,7 @@ import {
   type AdminTenant,
   type AmoPipelineMapping,
   type AmoStatus,
+  type DetailedApiError,
   type SelfCheckResult,
   type TenantSettings,
   type TenantUser,
@@ -30,14 +31,19 @@ const STAGE_KEY_LABELS: Record<string, string> = {
   cancelled: 'Отказ',
 }
 
+/** Check if error is DetailedApiError */
+function isDetailedError(err: unknown): err is DetailedApiError {
+  return typeof err === 'object' && err !== null && 'url' in err
+}
+
 /** Safely extract error message string, never return [object Object] */
 const getErrorMessage = (err: unknown): string => {
   if (!err) return 'Неизвестная ошибка'
   if (typeof err === 'string') return err
   if (err instanceof Error) return err.message
   const e = err as Record<string, unknown>
-  if (typeof e.detail === 'string') return e.detail
   if (typeof e.message === 'string') return e.message
+  if (typeof e.detail === 'string') return e.detail
   if (e.detail && typeof e.detail === 'object') {
     try {
       return JSON.stringify(e.detail)
@@ -87,6 +93,7 @@ const AdminTenants = () => {
   const [activeTab, setActiveTab] = useState<ModalTab>('ai')
   const [settingsStatus, setSettingsStatus] = useState<SettingsStatus>('idle')
   const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [settingsErrorDetail, setSettingsErrorDetail] = useState<DetailedApiError | null>(null)
   const [settings, setSettings] = useState<TenantSettings>(safeSettings(null))
   const [actionStatus, setActionStatus] = useState<'idle' | 'loading'>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
@@ -135,20 +142,44 @@ const AdminTenants = () => {
   const loadSettings = useCallback(async (tenantId: string | number) => {
     setSettingsStatus('loading')
     setSettingsError(null)
+    setSettingsErrorDetail(null)
     setActionError(null)
+
+    // First try to get tenant settings - this is the main call
+    let rawSettings: TenantSettings | null = null
+    let settingsErr: unknown = null
+
     try {
-      const [rawSettings, rawAmoStatus, rawMapping] = await Promise.all([
-        getTenantSettings(tenantId).catch((e) => {
-          console.error('getTenantSettings failed:', e)
-          return null
-        }),
+      rawSettings = await getTenantSettings(tenantId)
+    } catch (e) {
+      console.error('getTenantSettings failed:', e)
+      settingsErr = e
+    }
+
+    // If settings failed, show detailed error immediately
+    if (!rawSettings) {
+      if (isDetailedError(settingsErr)) {
+        setSettingsErrorDetail(settingsErr)
+        setSettingsError(settingsErr.message || 'Ошибка загрузки настроек')
+      } else {
+        setSettingsError(getErrorMessage(settingsErr) || 'Не удалось загрузить настройки tenant')
+        // Create a basic detailed error for non-detailed errors
+        setSettingsErrorDetail({
+          message: getErrorMessage(settingsErr),
+          tenantId,
+          detail: settingsErr instanceof Error ? settingsErr.stack : undefined,
+        })
+      }
+      setSettingsStatus('error')
+      return
+    }
+
+    // Settings loaded, now get additional data
+    try {
+      const [rawAmoStatus, rawMapping] = await Promise.all([
         getAmoStatus(tenantId).catch(() => ({ connected: false })),
         getAmoPipelineMapping(tenantId).catch(() => []),
       ])
-
-      if (!rawSettings) {
-        throw new Error('Не удалось загрузить настройки tenant')
-      }
 
       const safe = safeSettings(rawSettings)
       setSettings(safe)
@@ -177,6 +208,7 @@ const AdminTenants = () => {
     setEditOpen(true)
     setSettingsStatus('idle')
     setSettingsError(null)
+    setSettingsErrorDetail(null)
     setActionError(null)
     setAmoBaseDomain('')
     setSettings(safeSettings(null))
@@ -187,6 +219,7 @@ const AdminTenants = () => {
     setEditOpen(false)
     setActiveTenant(null)
     setSettings(safeSettings(null))
+    setSettingsErrorDetail(null)
     setAmoStatus({ connected: false })
     setAmoMapping([])
     setSettingsStatus('idle')
@@ -580,13 +613,86 @@ const AdminTenants = () => {
 
               {/* ERROR STATE */}
               {settingsStatus === 'error' && (
-                <div className="admin-error-panel">
+                <div className="admin-error-panel admin-error-panel--detailed">
                   <div className="admin-error-icon">⚠️</div>
-                  <h3>Ошибка загрузки</h3>
-                  <p>{settingsError || 'Не удалось загрузить настройки'}</p>
-                  <button className="admin-btn admin-btn--primary" type="button" onClick={handleRetrySettings}>
-                    Повторить
-                  </button>
+                  <h3>Ошибка загрузки настроек</h3>
+                  
+                  {/* Main error message */}
+                  <p className="admin-error-message">{settingsError || 'Не удалось загрузить настройки'}</p>
+                  
+                  {/* Detailed diagnostics */}
+                  {settingsErrorDetail && (
+                    <div className="admin-error-diagnostics">
+                      <div className="admin-error-diagnostics-title">🔧 Диагностика:</div>
+                      <div className="admin-error-diagnostics-grid">
+                        {settingsErrorDetail.status && (
+                          <div className="admin-diag-row">
+                            <span className="admin-diag-label">HTTP Status:</span>
+                            <span className="admin-diag-value admin-diag-value--code">{settingsErrorDetail.status}</span>
+                          </div>
+                        )}
+                        {settingsErrorDetail.url && (
+                          <div className="admin-diag-row">
+                            <span className="admin-diag-label">URL:</span>
+                            <span className="admin-diag-value admin-diag-value--mono">{settingsErrorDetail.url}</span>
+                          </div>
+                        )}
+                        {settingsErrorDetail.detail && (
+                          <div className="admin-diag-row">
+                            <span className="admin-diag-label">Backend Detail:</span>
+                            <span className="admin-diag-value">{settingsErrorDetail.detail}</span>
+                          </div>
+                        )}
+                        <div className="admin-diag-row">
+                          <span className="admin-diag-label">Auth Header:</span>
+                          <span className={`admin-diag-value ${settingsErrorDetail.hasAuthHeader ? 'admin-diag-value--ok' : 'admin-diag-value--warn'}`}>
+                            {settingsErrorDetail.hasAuthHeader ? '✅ Присутствует' : '❌ Отсутствует'}
+                          </span>
+                        </div>
+                        {settingsErrorDetail.tenantId && (
+                          <div className="admin-diag-row">
+                            <span className="admin-diag-label">Tenant ID:</span>
+                            <span className="admin-diag-value">{settingsErrorDetail.tenantId}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Response body preview */}
+                      {settingsErrorDetail.responseBody && (
+                        <div className="admin-error-response">
+                          <div className="admin-diag-label">Response (первые 500 символов):</div>
+                          <pre className="admin-error-response-body">{settingsErrorDetail.responseBody}</pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="admin-error-actions">
+                    <button className="admin-btn admin-btn--primary" type="button" onClick={handleRetrySettings}>
+                      Повторить
+                    </button>
+                    {settingsErrorDetail && (
+                      <button
+                        className="admin-btn admin-btn--secondary"
+                        type="button"
+                        onClick={() => {
+                          const diag = {
+                            url: settingsErrorDetail.url,
+                            status: settingsErrorDetail.status,
+                            detail: settingsErrorDetail.detail,
+                            responseBody: settingsErrorDetail.responseBody,
+                            hasAuthHeader: settingsErrorDetail.hasAuthHeader,
+                            tenantId: settingsErrorDetail.tenantId,
+                            timestamp: new Date().toISOString(),
+                          }
+                          navigator.clipboard.writeText(JSON.stringify(diag, null, 2))
+                          showToast('Диагностика скопирована')
+                        }}
+                      >
+                        📋 Скопировать диагностику
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 

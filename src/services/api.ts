@@ -7,10 +7,70 @@ type ApiError = Error & {
   status?: number
 }
 
+/** Structured error with full diagnostic info */
+export type DetailedApiError = {
+  message: string
+  status?: number
+  url?: string
+  detail?: string
+  responseBody?: string
+  hasAuthHeader?: boolean
+  tenantId?: string | number
+}
+
 let unauthorizedHandler: (() => void) | null = null
 
 export const setUnauthorizedHandler = (handler: (() => void) | null) => {
   unauthorizedHandler = handler
+}
+
+/** Build structured error with full diagnostics */
+const buildDetailedError = async (
+  response: Response,
+  requestUrl: string,
+  hasAuth: boolean,
+  options?: { skipUnauthorized?: boolean; isLogin?: boolean; tenantId?: string | number },
+): Promise<DetailedApiError> => {
+  let detail: string | undefined
+  let responseBody = ''
+  let message = `HTTP ${response.status}`
+
+  try {
+    responseBody = await response.text()
+    if (responseBody) {
+      try {
+        const data = JSON.parse(responseBody)
+        detail = data?.detail || data?.message || data?.error
+        if (typeof detail === 'object') {
+          detail = JSON.stringify(detail)
+        }
+        message = detail || `HTTP ${response.status}`
+      } catch {
+        // Not JSON, use first 300 chars
+        detail = responseBody.slice(0, 300)
+        message = `HTTP ${response.status}: ${detail.slice(0, 100)}`
+      }
+    }
+  } catch {
+    message = `HTTP ${response.status} (no body)`
+  }
+
+  if (response.status === 401) {
+    message = options?.isLogin ? 'Неверный логин или пароль' : 'Сессия истекла. Войдите снова.'
+    if (!options?.skipUnauthorized) {
+      unauthorizedHandler?.()
+    }
+  }
+
+  return {
+    message,
+    status: response.status,
+    url: requestUrl,
+    detail,
+    responseBody: responseBody.slice(0, 500),
+    hasAuthHeader: hasAuth,
+    tenantId: options?.tenantId,
+  }
 }
 
 const buildError = async (
@@ -1605,8 +1665,25 @@ export type TenantSettings = {
 export const getTenantSettings = async (
   tenantId: string | number,
 ): Promise<TenantSettings> => {
-  const url = fullUrl(`/api/admin/tenants/${tenantId}/settings`)
-  const response = await fetch(url, { method: 'GET', headers: { ...authHeaders() } })
+  const requestUrl = fullUrl(`/api/admin/tenants/${tenantId}/settings`)
+  const headers = authHeaders()
+  const hasAuth = Boolean((headers as Record<string, string>).Authorization)
+  
+  let response: Response
+  try {
+    response = await fetch(requestUrl, { method: 'GET', headers: { ...headers } })
+  } catch (e) {
+    // Network error
+    const err: DetailedApiError = {
+      message: e instanceof Error ? e.message : 'Network error',
+      url: requestUrl,
+      hasAuthHeader: hasAuth,
+      tenantId,
+      detail: 'Fetch failed - возможно CORS или сервер недоступен',
+    }
+    throw err
+  }
+
   if (response.status === 404) {
     // fallback: try to get from tenant + whatsapp binding + amo status
     const [tenantRes, bindingRes, amoRes] = await Promise.all([
@@ -1642,7 +1719,12 @@ export const getTenantSettings = async (
       amocrm_expires_at: amo.expires_at ?? null,
     }
   }
-  if (!response.ok) throw await buildError(response)
+
+  if (!response.ok) {
+    const detailedErr = await buildDetailedError(response, requestUrl, hasAuth, { tenantId })
+    throw detailedErr
+  }
+
   const data = await response.json() as TenantSettings
   // Ensure binding_exists is computed if not provided
   if (data.chatflow_binding_exists === undefined) {
