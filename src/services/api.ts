@@ -186,12 +186,12 @@ export const login = async (email: string, password: string) => {
   let response: Response
   try {
     response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body,
-    })
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+  })
   } catch (e) {
     if (import.meta.env.DEV) {
       console.error('[api] login fetch failed', { url, error: e })

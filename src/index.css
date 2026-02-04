@@ -3637,11 +3637,100 @@ a {
   }
 }
 
+/* Admin Filters */
+.admin-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.admin-input--filter {
+  width: auto;
+  min-width: 160px;
+}
+
+/* Admin Modal Sizes */
+.admin-modal--sm {
+  max-width: 480px;
+}
+
+/* Admin Modal Footer */
+.admin-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* Admin Modal Text */
+.admin-modal-text {
+  font-size: 15px;
+  color: #475569;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+/* Admin Temp Password */
+.admin-temp-password {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: #f1f5f9;
+  padding: 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.admin-temp-password-value {
+  flex: 1;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  background: #fff;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+/* Admin Alert Warning */
+.admin-alert--warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+/* Admin Table Date */
+.admin-table-date {
+  font-size: 13px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* Admin Danger Button */
+.admin-btn--danger {
+  background: #ef4444;
+  color: #fff;
+}
+
+.admin-btn--danger:hover {
+  background: #dc2626;
+}
+
 /* Admin Diagnostics */
 .admin-diag-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: 1fr;
   gap: 24px;
+}
+
+@media (min-width: 1200px) {
+  .admin-diag-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .admin-diag-card {
@@ -3651,25 +3740,71 @@ a {
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
+.admin-diag-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
 .admin-diag-title {
   font-size: 18px;
   font-weight: 600;
   color: #1e293b;
-  margin: 0 0 8px 0;
+  margin: 0 0 4px 0;
+}
+
+.admin-diag-desc {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
 }
 
 .admin-diag-controls {
   display: flex;
   gap: 12px;
-  margin: 16px 0;
+  margin: 16px 0 0 0;
 }
 
 .admin-diag-controls .admin-input {
   flex: 1;
 }
 
-.admin-diag-output {
+.admin-diag-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.admin-spinner--sm {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+}
+
+.admin-diag-result {
   margin-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
+.admin-diag-result-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.admin-diag-timestamp {
+  font-size: 12px;
+  color: #94a3b8;
+  flex: 1;
+}
+
+.admin-diag-output {
   padding: 16px;
   background: #1e293b;
   color: #e2e8f0;
@@ -3681,6 +3816,19 @@ a {
   word-break: break-word;
   max-height: 400px;
   overflow-y: auto;
+  margin: 0;
+}
+
+.admin-diag-output--success {
+  border-left: 4px solid #10b981;
+}
+
+.admin-diag-output--warn {
+  border-left: 4px solid #f59e0b;
+}
+
+.admin-diag-output--error {
+  border-left: 4px solid #ef4444;
 }
 
 /* Mobile Admin Responsive */

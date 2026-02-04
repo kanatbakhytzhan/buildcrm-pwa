@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { CRM_V2_ENABLED } from '../config/appConfig'
 import {
   createAdminUser,
   getAdminUsers,
@@ -13,11 +10,12 @@ import {
 import { formatLeadBadge } from '../utils/dateFormat'
 
 const AdminUsers = () => {
-  const navigate = useNavigate()
-  const { logout } = useAuth()
   const [users, setUsers] = useState<AdminUser[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+
+  // Modals
   const [createOpen, setCreateOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
   const [resetResultOpen, setResetResultOpen] = useState(false)
@@ -32,12 +30,20 @@ const AdminUsers = () => {
     companyName: '',
   })
 
+  // Filters
+  const [filterActive, setFilterActive] = useState<string>('')
+
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3000)
+  }
+
   const loadUsers = useCallback(async () => {
     setStatus('loading')
     setError(null)
     try {
       const data = await getAdminUsers()
-      setUsers(data)
+      setUsers(Array.isArray(data) ? data : [])
       setStatus('idle')
     } catch (err) {
       const apiError = err as { status?: number; message?: string }
@@ -56,12 +62,13 @@ const AdminUsers = () => {
     loadUsers()
   }, [loadUsers])
 
-  const usersCountLabel = useMemo(() => {
-    if (status === 'loading') {
-      return 'Загрузка пользователей...'
-    }
-    return `Пользователей: ${users.length}`
-  }, [status, users.length])
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      if (filterActive === 'active' && !u.is_active) return false
+      if (filterActive === 'inactive' && u.is_active) return false
+      return true
+    })
+  }, [users, filterActive])
 
   const closeCreate = () => {
     setCreateOpen(false)
@@ -81,12 +88,6 @@ const AdminUsers = () => {
     setActiveUser(null)
   }
 
-  const copyTempPassword = () => {
-    if (tempPassword) {
-      navigator.clipboard.writeText(tempPassword).catch(() => {})
-    }
-  }
-
   const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setActionStatus('loading')
@@ -98,14 +99,11 @@ const AdminUsers = () => {
         company_name: createForm.companyName.trim() || undefined,
       })
       closeCreate()
+      showToast('Пользователь создан ✅')
       await loadUsers()
     } catch (err) {
       const apiError = err as { status?: number; message?: string }
-      if (err instanceof TypeError) {
-        setActionError('Ошибка сети')
-      } else {
-        setActionError(apiError?.message || 'Не удалось создать пользователя')
-      }
+      setActionError(apiError?.message || 'Не удалось создать пользователя')
     } finally {
       setActionStatus('idle')
     }
@@ -122,11 +120,7 @@ const AdminUsers = () => {
       setResetResultOpen(true)
     } catch (err) {
       const apiError = err as { status?: number; message?: string }
-      if (err instanceof TypeError) {
-        setActionError('Ошибка сети')
-      } else {
-        setActionError(apiError?.message || 'Не удалось сбросить пароль')
-      }
+      setActionError(apiError?.message || 'Не удалось сбросить пароль')
     } finally {
       setActionStatus('idle')
     }
@@ -138,17 +132,12 @@ const AdminUsers = () => {
     try {
       await updateAdminUser(user.id, { is_active: !user.is_active })
       setUsers((prev) =>
-        prev.map((item) =>
-          item.id === user.id ? { ...item, is_active: !item.is_active } : item,
-        ),
+        prev.map((item) => (item.id === user.id ? { ...item, is_active: !item.is_active } : item))
       )
+      showToast(user.is_active ? 'Пользователь деактивирован' : 'Пользователь активирован ✅')
     } catch (err) {
       const apiError = err as { status?: number; message?: string }
-      if (err instanceof TypeError) {
-        setError('Ошибка сети')
-      } else {
-        setError(apiError?.message || 'Не удалось обновить статус')
-      }
+      setError(apiError?.message || 'Не удалось обновить статус')
     } finally {
       setBusyUserId(null)
     }
@@ -160,232 +149,239 @@ const AdminUsers = () => {
     setActionError(null)
   }
 
+  // Escape key handling
+  useEffect(() => {
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (resetResultOpen) closeResetResult()
+        else if (resetOpen) closeReset()
+        else if (createOpen) closeCreate()
+      }
+    }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [createOpen, resetOpen, resetResultOpen])
+
   return (
-    <div className="page-stack">
-      <div className="page-header">
-        <div className="page-header__text">
-          <h1 className="title">Админка</h1>
-          <p className="subtitle">Пользователи CRM</p>
+    <div className="admin-page">
+      <div className="admin-page-header">
+        <div>
+          <h1 className="admin-page-title">Пользователи</h1>
+          <p className="admin-page-subtitle">
+            {status === 'loading' ? 'Загрузка...' : `Всего: ${users.length}`}
+          </p>
         </div>
-        <div className="action-card">
-          <button
-            className="primary-button"
-            type="button"
-            onClick={() => setCreateOpen(true)}
-          >
-            Создать пользователя
+        <div className="admin-btn-group">
+          <button className="admin-btn admin-btn--primary" type="button" onClick={() => setCreateOpen(true)}>
+            + Создать пользователя
           </button>
           <button
-            className="ghost-button"
+            className="admin-btn admin-btn--secondary"
             type="button"
             onClick={loadUsers}
             disabled={status === 'loading'}
           >
-            Обновить
-          </button>
-          <button
-            className="ghost-button"
-            type="button"
-            onClick={() => navigate('/admin/tenants')}
-          >
-            Клиенты
-          </button>
-          <button
-            className="ghost-button"
-            type="button"
-            onClick={() => navigate('/admin/diagnostics')}
-          >
-            Диагностика
-          </button>
-          {CRM_V2_ENABLED && (
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={() => navigate('/v2/leads-table')}
-            >
-              CRM v2 (таблица)
-            </button>
-          )}
-          <button
-            className="ghost-button"
-            type="button"
-            onClick={() => {
-              logout()
-              navigate('/admin/login')
-            }}
-          >
-            Выйти
+            {status === 'loading' ? 'Загрузка...' : 'Обновить'}
           </button>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-title">{usersCountLabel}</div>
-        {error && <div className="error-text">{error}</div>}
+      {/* Filters */}
+      <div className="admin-filters">
+        <select
+          className="admin-input admin-input--filter"
+          value={filterActive}
+          onChange={(e) => setFilterActive(e.target.value)}
+        >
+          <option value="">Все статусы</option>
+          <option value="active">Активные</option>
+          <option value="inactive">Неактивные</option>
+        </select>
       </div>
 
-      {!error && users.length === 0 && status !== 'loading' && (
-        <div className="card">
-          <div className="info-text">Пользователей пока нет</div>
+      {error && <div className="admin-alert admin-alert--error">{error}</div>}
+
+      {status === 'loading' && (
+        <div className="admin-loading-panel">
+          <div className="admin-spinner" />
+          <p>Загрузка пользователей...</p>
         </div>
       )}
 
-      {!error &&
-        users.map((user) => (
-          <div className="card" key={user.id}>
-            <div className="toggle-row">
-              <div>
-                <div className="toggle-title">{user.email}</div>
-                <div className="toggle-subtitle">
-                  {user.company_name || 'Компания не указана'}
-                </div>
-                <div className="info-text">
-                  Создан: {formatLeadBadge(user.created_at)}
-                </div>
-              </div>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => handleOpenReset(user)}
-              >
-                Сбросить пароль
+      {!error && status !== 'loading' && filteredUsers.length === 0 && (
+        <div className="admin-empty">
+          {users.length === 0 ? 'Пользователей пока нет' : 'Нет пользователей по фильтру'}
+        </div>
+      )}
+
+      {!error && filteredUsers.length > 0 && (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Компания</th>
+                <th>Статус</th>
+                <th>Создан</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map((user) => (
+                <tr key={user.id}>
+                  <td className="admin-table-name">{user.email}</td>
+                  <td>{user.company_name || '—'}</td>
+                  <td>
+                    <span className={`admin-badge ${user.is_active ? 'admin-badge--ok' : 'admin-badge--off'}`}>
+                      {user.is_active ? 'Активен' : 'Неактивен'}
+                    </span>
+                  </td>
+                  <td className="admin-table-date">{formatLeadBadge(user.created_at)}</td>
+                  <td className="admin-table-actions">
+                    <button className="admin-btn admin-btn--sm" type="button" onClick={() => handleOpenReset(user)}>
+                      Сбросить пароль
+                    </button>
+                    <button
+                      className={`admin-btn admin-btn--sm ${user.is_active ? 'admin-btn--ghost' : 'admin-btn--accent'}`}
+                      type="button"
+                      onClick={() => handleToggleActive(user)}
+                      disabled={busyUserId === user.id}
+                    >
+                      {busyUserId === user.id ? '...' : user.is_active ? 'Деактивировать' : 'Активировать'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && <div className="admin-toast">{toast}</div>}
+
+      {/* Create User Modal */}
+      {createOpen && (
+        <div className="admin-modal-backdrop" onClick={closeCreate}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2 className="admin-modal-title">Создать пользователя</h2>
+              <button className="admin-modal-close" type="button" onClick={closeCreate}>
+                ×
               </button>
             </div>
-            <div className="toggle-row">
-              <div className="info-text">
-                Статус: {user.is_active ? 'Активен' : 'Неактивен'}
-              </div>
-              <button
-                className="ghost-button"
-                type="button"
-                onClick={() => handleToggleActive(user)}
-                disabled={busyUserId === user.id}
-              >
-                {user.is_active ? 'Сделать неактивным' : 'Сделать активным'}
-              </button>
+            <div className="admin-modal-body">
+              <form className="admin-settings-section" onSubmit={handleCreateSubmit}>
+                <div className="admin-settings-block">
+                  <label className="admin-label">Email</label>
+                  <input
+                    className="admin-input"
+                    type="email"
+                    value={createForm.email}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
+                    placeholder="client@company.ru"
+                    required
+                  />
+                </div>
+                <div className="admin-settings-block">
+                  <label className="admin-label">Пароль</label>
+                  <input
+                    className="admin-input"
+                    type="password"
+                    value={createForm.password}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, password: e.target.value }))}
+                    placeholder="Введите пароль"
+                    required
+                  />
+                </div>
+                <div className="admin-settings-block">
+                  <label className="admin-label">Компания (опционально)</label>
+                  <input
+                    className="admin-input"
+                    type="text"
+                    value={createForm.companyName}
+                    onChange={(e) => setCreateForm((p) => ({ ...p, companyName: e.target.value }))}
+                    placeholder="Название компании"
+                  />
+                </div>
+                {actionError && <div className="admin-alert admin-alert--error">{actionError}</div>}
+                <div className="admin-modal-footer">
+                  <button className="admin-btn admin-btn--ghost" type="button" onClick={closeCreate}>
+                    Отмена
+                  </button>
+                  <button className="admin-btn admin-btn--primary" type="submit" disabled={actionStatus === 'loading'}>
+                    {actionStatus === 'loading' ? 'Создание...' : 'Создать'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-        ))}
+        </div>
+      )}
 
-      {createOpen && (
-        <div className="dialog-backdrop">
-          <div className="dialog">
-            <div className="dialog-title">Создать пользователя</div>
-            <form className="form-grid" onSubmit={handleCreateSubmit}>
-              <label className="field">
-                <span className="field-label">Email</span>
-                <input
-                  className="field-input"
-                  type="email"
-                  value={createForm.email}
-                  onChange={(event) =>
-                    setCreateForm((prev) => ({
-                      ...prev,
-                      email: event.target.value,
-                    }))
-                  }
-                  placeholder="client@company.ru"
-                  required
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Пароль</span>
-                <input
-                  className="field-input"
-                  type="password"
-                  value={createForm.password}
-                  onChange={(event) =>
-                    setCreateForm((prev) => ({
-                      ...prev,
-                      password: event.target.value,
-                    }))
-                  }
-                  placeholder="Введите пароль"
-                  required
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Компания</span>
-                <input
-                  className="field-input"
-                  type="text"
-                  value={createForm.companyName}
-                  onChange={(event) =>
-                    setCreateForm((prev) => ({
-                      ...prev,
-                      companyName: event.target.value,
-                    }))
-                  }
-                  placeholder="Название компании"
-                />
-              </label>
-              {actionError && <div className="error-text">{actionError}</div>}
-              <div className="dialog-actions">
-                <button className="ghost-button" type="button" onClick={closeCreate}>
+      {/* Reset Password Confirmation Modal */}
+      {resetOpen && activeUser && (
+        <div className="admin-modal-backdrop" onClick={closeReset}>
+          <div className="admin-modal admin-modal--sm" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2 className="admin-modal-title">Сбросить пароль</h2>
+              <button className="admin-modal-close" type="button" onClick={closeReset}>
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <p className="admin-modal-text">Сгенерировать временный пароль для {activeUser.email}?</p>
+              {actionError && <div className="admin-alert admin-alert--error">{actionError}</div>}
+              <div className="admin-modal-footer">
+                <button className="admin-btn admin-btn--ghost" type="button" onClick={closeReset}>
                   Отмена
                 </button>
                 <button
-                  className="primary-button"
-                  type="submit"
+                  className="admin-btn admin-btn--primary"
+                  type="button"
+                  onClick={handleResetConfirm}
                   disabled={actionStatus === 'loading'}
                 >
-                  {actionStatus === 'loading' ? 'Создаю...' : 'Создать'}
+                  {actionStatus === 'loading' ? 'Сброс...' : 'Сбросить пароль'}
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {resetOpen && activeUser && (
-        <div className="dialog-backdrop" onClick={closeReset}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="dialog-title">Сбросить пароль</div>
-            <div className="dialog-text">
-              Сгенерировать временный пароль для {activeUser.email}?
-            </div>
-            {actionError && <div className="error-text">{actionError}</div>}
-            <div className="dialog-actions">
-              <button className="ghost-button" type="button" onClick={closeReset}>
-                Отмена
-              </button>
-              <button
-                className="primary-button"
-                type="button"
-                onClick={handleResetConfirm}
-                disabled={actionStatus === 'loading'}
-              >
-                {actionStatus === 'loading' ? 'Сбрасываю...' : 'Сбросить пароль'}
-              </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Temp Password Result Modal */}
       {resetResultOpen && tempPassword && (
-        <div className="dialog-backdrop" onClick={closeResetResult}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="dialog-title">Временный пароль</div>
-            <div className="dialog-text warning-text">
-              Сохраните пароль сейчас, потом не покажется.
+        <div className="admin-modal-backdrop" onClick={closeResetResult}>
+          <div className="admin-modal admin-modal--sm" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2 className="admin-modal-title">Временный пароль</h2>
+              <button className="admin-modal-close" type="button" onClick={closeResetResult}>
+                ×
+              </button>
             </div>
-            <div className="field">
-              <span className="field-label">Пароль</span>
-              <div className="temp-password-row">
-                <code className="temp-password-value">{tempPassword}</code>
+            <div className="admin-modal-body">
+              <div className="admin-alert admin-alert--warn">
+                ⚠️ Сохраните пароль сейчас — потом он не будет показан!
+              </div>
+              <div className="admin-temp-password">
+                <code className="admin-temp-password-value">{tempPassword}</code>
                 <button
-                  className="secondary-button"
+                  className="admin-btn admin-btn--secondary"
                   type="button"
-                  onClick={copyTempPassword}
+                  onClick={() => {
+                    navigator.clipboard.writeText(tempPassword).catch(() => {})
+                    showToast('Пароль скопирован')
+                  }}
                 >
-                  Копировать
+                  📋 Копировать
                 </button>
               </div>
-            </div>
-            <div className="dialog-actions">
-              <button className="primary-button" type="button" onClick={closeResetResult}>
-                Закрыть
-              </button>
+              <div className="admin-modal-footer">
+                <button className="admin-btn admin-btn--primary" type="button" onClick={closeResetResult}>
+                  Готово
+                </button>
+              </div>
             </div>
           </div>
         </div>
