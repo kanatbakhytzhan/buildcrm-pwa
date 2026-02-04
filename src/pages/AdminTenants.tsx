@@ -6,7 +6,7 @@ import {
   getAmoAuthUrl,
   getAmoDiscovery,
   getAmoPipelineMapping,
-  getAmoPipelines,
+
   getAmoStages,
   getAmoStatus,
   getTenantSettings,
@@ -24,7 +24,7 @@ import {
   testWhatsApp,
   updateTenantSettings,
   type AdminTenant,
-  type AmoDiscoveryResult,
+
   type AmoPipeline,
   type AmoPipelineMapping,
   type AmoStage,
