@@ -8,6 +8,8 @@ import {
   getAmoStatus,
   getTenantSettings,
   getTenantUsers,
+  normalizeAmoDomain,
+  parseApiError,
   postTenantWhatsappBinding,
   saveAmoPipelineMapping,
   selfCheckTenant,
@@ -20,6 +22,7 @@ import {
   type TenantSettings,
   type TenantUser,
 } from '../services/api'
+import { BASE_URL } from '../config/appConfig'
 
 type ModalTab = 'ai' | 'whatsapp' | 'amocrm'
 type SettingsStatus = 'idle' | 'loading' | 'error' | 'ready'
@@ -36,27 +39,10 @@ function isDetailedError(err: unknown): err is DetailedApiError {
   return typeof err === 'object' && err !== null && 'url' in err
 }
 
-/** Safely extract error message string, never return [object Object] */
+/** Safely extract error message string using global parseApiError */
 const getErrorMessage = (err: unknown): string => {
-  if (!err) return 'Неизвестная ошибка'
-  if (typeof err === 'string') return err
-  if (err instanceof Error) return err.message
-  const e = err as Record<string, unknown>
-  if (typeof e.message === 'string') return e.message
-  if (typeof e.detail === 'string') return e.detail
-  if (e.detail && typeof e.detail === 'object') {
-    try {
-      return JSON.stringify(e.detail)
-    } catch {
-      return 'Ошибка запроса'
-    }
-  }
-  try {
-    const s = JSON.stringify(err)
-    return s.length > 200 ? s.slice(0, 200) + '...' : s
-  } catch {
-    return 'Ошибка запроса'
-  }
+  const parsed = parseApiError(err)
+  return parsed.detail
 }
 
 /** Create safe default settings to avoid undefined crashes */
@@ -115,6 +101,9 @@ const AdminTenants = () => {
   const [checkOpen, setCheckOpen] = useState(false)
   const [checkResult, setCheckResult] = useState<SelfCheckResult | null>(null)
   const [checkLoading, setCheckLoading] = useState(false)
+
+  // Help modal for AmoCRM setup
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -459,14 +448,15 @@ const AdminTenants = () => {
   useEffect(() => {
     const onEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (checkOpen) closeCheck()
+        if (helpOpen) setHelpOpen(false)
+        else if (checkOpen) closeCheck()
         else if (usersOpen) closeUsers()
         else if (editOpen) closeEdit()
       }
     }
     window.addEventListener('keydown', onEscape)
     return () => window.removeEventListener('keydown', onEscape)
-  }, [editOpen, usersOpen, checkOpen])
+  }, [editOpen, usersOpen, checkOpen, helpOpen])
 
   // --- Render ---
   return (
@@ -899,6 +889,13 @@ const AdminTenants = () => {
                             type="text"
                             value={amoBaseDomain}
                             onChange={(e) => setAmoBaseDomain(e.target.value)}
+                            onBlur={(e) => {
+                              // Normalize domain on blur (extract hostname from full URL)
+                              const normalized = normalizeAmoDomain(e.target.value)
+                              if (normalized && normalized !== e.target.value) {
+                                setAmoBaseDomain(normalized)
+                              }
+                            }}
                             placeholder="mycompany.amocrm.ru"
                           />
                           <button
@@ -911,7 +908,7 @@ const AdminTenants = () => {
                           </button>
                         </div>
                         <div className="admin-settings-hint" style={{ marginTop: 4 }}>
-                          Укажите домен вашего AmoCRM (без https://)
+                          Можно вставить ссылку целиком, например: https://company.amocrm.ru/leads/
                         </div>
                       </div>
 
@@ -931,6 +928,13 @@ const AdminTenants = () => {
                           disabled={amoLoading}
                         >
                           Обновить статус
+                        </button>
+                        <button
+                          className="admin-btn admin-btn--ghost"
+                          type="button"
+                          onClick={() => setHelpOpen(true)}
+                        >
+                          ❓ Как подключить
                         </button>
                       </div>
 
@@ -1113,6 +1117,75 @@ const AdminTenants = () => {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AmoCRM Help Modal */}
+      {helpOpen && (
+        <div className="admin-modal-backdrop" onClick={() => setHelpOpen(false)}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2 className="admin-modal-title">Как подключить AmoCRM</h2>
+              <button className="admin-modal-close" type="button" onClick={() => setHelpOpen(false)}>
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <div className="admin-help-steps">
+                <div className="admin-help-step">
+                  <div className="admin-help-step-number">1</div>
+                  <div className="admin-help-step-content">
+                    <strong>Создайте интеграцию в AmoCRM</strong>
+                    <p>Перейдите в AmoCRM → Настройки → Интеграции → Создать интеграцию</p>
+                  </div>
+                </div>
+                <div className="admin-help-step">
+                  <div className="admin-help-step-number">2</div>
+                  <div className="admin-help-step-content">
+                    <strong>Укажите Redirect URL</strong>
+                    <p>Вставьте этот URL в настройках интеграции:</p>
+                    <code className="admin-help-code">{BASE_URL}/api/integrations/amocrm/callback</code>
+                    <button
+                      className="admin-btn admin-btn--sm admin-btn--ghost"
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${BASE_URL}/api/integrations/amocrm/callback`)
+                        showToast('URL скопирован')
+                      }}
+                    >
+                      📋 Копировать
+                    </button>
+                  </div>
+                </div>
+                <div className="admin-help-step">
+                  <div className="admin-help-step-number">3</div>
+                  <div className="admin-help-step-content">
+                    <strong>Скопируйте client_id и client_secret</strong>
+                    <p>Эти данные нужно добавить в переменные окружения на Render (или где развёрнут backend)</p>
+                  </div>
+                </div>
+                <div className="admin-help-step">
+                  <div className="admin-help-step-number">4</div>
+                  <div className="admin-help-step-content">
+                    <strong>Введите домен AmoCRM</strong>
+                    <p>В поле выше укажите ваш домен (например: company.amocrm.ru) и нажмите Сохранить</p>
+                  </div>
+                </div>
+                <div className="admin-help-step">
+                  <div className="admin-help-step-number">5</div>
+                  <div className="admin-help-step-content">
+                    <strong>Нажмите "Подключить AmoCRM"</strong>
+                    <p>Откроется окно авторизации. После успешного входа вернитесь сюда и обновите статус.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="admin-modal-footer">
+                <button className="admin-btn admin-btn--primary" type="button" onClick={() => setHelpOpen(false)}>
+                  Понятно
+                </button>
+              </div>
             </div>
           </div>
         </div>

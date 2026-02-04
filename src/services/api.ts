@@ -18,6 +18,81 @@ export type DetailedApiError = {
   tenantId?: string | number
 }
 
+/** Global API error parser - use this everywhere to extract meaningful error info */
+export function parseApiError(err: unknown): { status?: number; detail: string; raw?: unknown } {
+  if (!err) return { detail: 'Неизвестная ошибка' }
+  
+  // Already a DetailedApiError
+  if (typeof err === 'object' && err !== null && 'detail' in err) {
+    const e = err as DetailedApiError
+    return {
+      status: e.status,
+      detail: e.detail || e.message || 'Ошибка запроса',
+      raw: err,
+    }
+  }
+  
+  // Regular Error with message
+  if (err instanceof Error) {
+    const isNetwork = /failed to fetch|network|cors|load failed|timeout/i.test(err.message)
+    return {
+      detail: isNetwork
+        ? 'Ошибка сети: сервер недоступен или CORS. Попробуйте обновить страницу.'
+        : err.message,
+      raw: err,
+    }
+  }
+  
+  // Object with detail/message
+  if (typeof err === 'object' && err !== null) {
+    const e = err as Record<string, unknown>
+    const detail = e.detail ?? e.message ?? e.error
+    if (typeof detail === 'string') {
+      return { status: e.status as number | undefined, detail, raw: err }
+    }
+    if (detail && typeof detail === 'object') {
+      try {
+        return { status: e.status as number | undefined, detail: JSON.stringify(detail), raw: err }
+      } catch {
+        // ignore
+      }
+    }
+  }
+  
+  // String
+  if (typeof err === 'string') {
+    return { detail: err }
+  }
+  
+  // Fallback
+  try {
+    return { detail: JSON.stringify(err).slice(0, 300) }
+  } catch {
+    return { detail: 'Ошибка запроса' }
+  }
+}
+
+/** Extract hostname from full URL or return as-is if already hostname */
+export function normalizeAmoDomain(input: string): string {
+  if (!input) return ''
+  const trimmed = input.trim()
+  
+  // If it looks like a full URL, extract hostname
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    try {
+      const url = new URL(trimmed)
+      return url.hostname
+    } catch {
+      // Invalid URL, try to extract anyway
+      const match = trimmed.match(/https?:\/\/([^\/]+)/)
+      if (match) return match[1]
+    }
+  }
+  
+  // Remove trailing slashes and paths
+  return trimmed.replace(/\/.*$/, '').replace(/^www\./, '')
+}
+
 let unauthorizedHandler: (() => void) | null = null
 
 export const setUnauthorizedHandler = (handler: (() => void) | null) => {

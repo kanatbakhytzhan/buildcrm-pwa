@@ -3831,6 +3831,66 @@ a {
   border-left: 4px solid #ef4444;
 }
 
+/* Admin Help Steps */
+.admin-help-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-help-step {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 10px;
+  align-items: flex-start;
+}
+
+.admin-help-step-number {
+  width: 32px;
+  height: 32px;
+  background: #6366f1;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.admin-help-step-content {
+  flex: 1;
+}
+
+.admin-help-step-content strong {
+  display: block;
+  font-size: 15px;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.admin-help-step-content p {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.admin-help-code {
+  display: block;
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
 /* Mobile Admin Responsive */
 @media (max-width: 1024px) {
   .admin-sidebar {
