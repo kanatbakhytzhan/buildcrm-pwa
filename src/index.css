@@ -3945,6 +3945,20 @@ a {
   margin-top: 4px;
 }
 
+/* Test panel */
+.admin-test-panel {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.admin-alert--success {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
 /* Mobile Admin Responsive */
 @media (max-width: 1024px) {
   .admin-sidebar {
