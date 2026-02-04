@@ -10,7 +10,8 @@ import {
   getAmoStatus,
   getTenantSettings,
   getTenantUsers,
-  getTenantWhatsappBinding, // Added import
+  getTenantWhatsapps,
+  type TenantWhatsapp,
   normalizeAmoDomain,
   parseApiError,
   postTenantWhatsappBinding,
@@ -227,16 +228,16 @@ const AdminTenants = () => {
 
     // Parallel fetch: Settings + WhatsApp Binding (as requested)
     let rawSettings: TenantSettings | null = null
-    let waBinding: TenantWhatsappBinding | null = null
+    let waBinding: TenantWhatsapp | null = null
     let settingsErr: unknown = null
 
     try {
-      const [s, w] = await Promise.all([
+      const [s, wList] = await Promise.all([
         getTenantSettings(tenantId),
-        getTenantWhatsappBinding(tenantId).catch(() => null)
+        getTenantWhatsapps(tenantId).catch(() => [])
       ])
       rawSettings = s
-      waBinding = w
+      waBinding = wList && wList.length > 0 ? wList[0] : null
       console.log('[AdminTenants] Loaded settings:', { rawSettings, waBinding })
     } catch (e) {
       console.error('getTenantSettings failed:', e)
@@ -586,7 +587,7 @@ const AdminTenants = () => {
       // Fetch binding and settings to confirm
       const [verifiedSettings, verifiedBinding] = await Promise.all([
         getTenantSettings(activeTenant.id),
-        getTenantWhatsappBinding(activeTenant.id)
+        getTenantWhatsapps(activeTenant.id).then(list => list[0] || null)
       ])
 
       // 5. Compare
@@ -1136,7 +1137,7 @@ const AdminTenants = () => {
                       </div>
                       <textarea
                         className="admin-input admin-input--textarea"
-                        value={settings.ai_prompt}
+                        value={settings.ai_prompt ?? ''}
                         onChange={(e) => {
                           const val = e.target.value
                           setSettings(p => ({ ...p, ai_prompt: val }))
@@ -1176,647 +1177,654 @@ const AdminTenants = () => {
                       {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить'}
                     </button>
                   </div>
+                </div>
               )}
 
-                  {/* READY STATE - WhatsApp Tab */}
-                  {settingsStatus === 'ready' && activeTab === 'whatsapp' && (
-                    <div className="admin-settings-section">
-                      <div className="admin-settings-block">
-                        <label className="admin-label">Источник WhatsApp</label>
-                        <select
-                          className="admin-input"
-                          value={settings.whatsapp_source ?? 'chatflow'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, whatsapp_source: e.target.value as TenantSettings['whatsapp_source'] })
-                          }
-                        >
-                          <option value="chatflow">ChatFlow</option>
-                          <option value="amomarket">AmoCRM Marketplace</option>
-                        </select>
-                        <div className="admin-settings-hint" style={{ marginTop: 8, color: '#f59e0b' }}>
-                          Выберите только один источник. Нельзя использовать оба.
+              {/* READY STATE - WhatsApp Tab */}
+              {settingsStatus === 'ready' && activeTab === 'whatsapp' && (
+                <div className="admin-settings-section">
+                  <div className="admin-settings-block">
+                    <label className="admin-label">Источник WhatsApp</label>
+                    <select
+                      className="admin-input"
+                      value={settings.whatsapp_source ?? 'chatflow'}
+                      onChange={(e) =>
+                        setSettings({ ...settings, whatsapp_source: e.target.value as TenantSettings['whatsapp_source'] })
+                      }
+                    >
+                      <option value="chatflow">ChatFlow</option>
+                      <option value="amomarket">AmoCRM Marketplace</option>
+                    </select>
+                    <div className="admin-settings-hint" style={{ marginTop: 8, color: '#f59e0b' }}>
+                      Выберите только один источник. Нельзя использовать оба.
+                    </div>
+                  </div>
+
+                  {settings.whatsapp_source === 'amomarket' ? (
+                    <div className="admin-info-box">
+                      <strong>AmoCRM Marketplace</strong>
+                      <br />
+                      WhatsApp подключается внутри AmoCRM. Вебхук настраивать не нужно.
+                    </div>
+                  ) : (
+                    <>
+                      {/* Status based on server binding info */}
+                      <div className={`admin-status-box ${serverWhatsApp.binding_exists || isBound ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}>
+                        {serverWhatsApp.binding_exists || isBound
+                          ? '✅ Привязано — бот готов отвечать'
+                          : '⚠️ Не привязано — бот не сможет отвечать'}
+                      </div>
+
+                      {/* Show masked token info if we have it from server */}
+                      {(serverWhatsApp.token_masked || settings.chatflow_token_masked) && (
+                        <div className="admin-info-box">
+                          <strong>Текущий токен:</strong> {serverWhatsApp.token_masked || settings.chatflow_token_masked}
+                          <br />
+                          <small>Оставьте поле пустым, чтобы сохранить текущий токен. Введите новый токен, чтобы обновить.</small>
+                        </div>
+                      )}
+
+                      <div className="admin-form-grid">
+                        <div className="admin-settings-block">
+                          <label className="admin-label">
+                            ChatFlow Token (JWT)
+                            {dirtyFields.has('chatflow_token') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
+                          </label>
+                          <textarea
+                            className="admin-input admin-input--textarea"
+                            value={settings.chatflow_token ?? ''}
+                            onChange={(e) => {
+                              setSettings({ ...settings, chatflow_token: e.target.value })
+                              setDirtyFields(prev => new Set(prev).add('chatflow_token'))
+                            }}
+                            placeholder={serverWhatsApp.token_masked ? '(оставьте пустым для сохранения текущего)' : 'eyJhbGciOiJIUzI1NiIs...'}
+                            rows={3}
+                          />
+                        </div>
+
+                        <div className="admin-settings-block">
+                          <label className="admin-label">
+                            Instance ID
+                            {dirtyFields.has('chatflow_instance_id') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
+                          </label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={settings.chatflow_instance_id ?? ''}
+                            onChange={(e) => {
+                              setSettings({ ...settings, chatflow_instance_id: e.target.value })
+                              setDirtyFields(prev => new Set(prev).add('chatflow_instance_id'))
+                            }}
+                            placeholder="ID инстанса (QR в ChatFlow)"
+                          />
+                        </div>
+
+                        <div className="admin-settings-block">
+                          <label className="admin-label">
+                            Номер телефона
+                            {dirtyFields.has('chatflow_phone_number') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
+                          </label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={settings.chatflow_phone_number ?? ''}
+                            onChange={(e) => {
+                              setSettings({ ...settings, chatflow_phone_number: e.target.value })
+                              setDirtyFields(prev => new Set(prev).add('chatflow_phone_number'))
+                            }}
+                            placeholder="+77001234567"
+                          />
+                        </div>
+
+                        <div className="admin-settings-block">
+                          <div className="admin-settings-row">
+                            <span className="admin-label" style={{ marginBottom: 0 }}>
+                              Активен
+                            </span>
+                            <label className="admin-switch">
+                              <input
+                                type="checkbox"
+                                checked={settings.chatflow_active !== false}
+                                onChange={(e) => setSettings({ ...settings, chatflow_active: e.target.checked })}
+                              />
+                              <span className="admin-switch-track">
+                                <span className="admin-switch-thumb" />
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {actionError && <div className="admin-alert admin-alert--error">{actionError}</div>}
+
+                  <div className="admin-btn-group">
+                    <button
+                      className="admin-btn admin-btn--primary"
+                      type="button"
+                      onClick={handleSaveWhatsApp}
+                      disabled={actionStatus === 'loading'}
+                    >
+                      {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить привязку'}
+                    </button>
+
+                    {(serverWhatsApp.binding_exists || isBound) && (
+                      <button
+                        className="admin-btn admin-btn--secondary"
+                        type="button"
+                        onClick={() => setWaTestOpen(true)}
+                      >
+                        📱 Проверить WhatsApp
+                      </button>
+                    )}
+                  </div>
+
+                  {/* WhatsApp Test Panel */}
+                  {waTestOpen && (
+                    <div className="admin-test-panel" style={{ marginTop: 16 }}>
+                      <div className="admin-divider" />
+                      <h4 className="admin-subtitle">Тест отправки сообщения</h4>
+
+                      <div className="admin-form-grid">
+                        <div className="admin-settings-block">
+                          <label className="admin-label">Номер телефона (получатель)</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={waTestPhone}
+                            onChange={(e) => setWaTestPhone(e.target.value)}
+                            placeholder="+77001234567"
+                          />
+                        </div>
+
+                        <div className="admin-settings-block">
+                          <label className="admin-label">Текст сообщения</label>
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={waTestMessage}
+                            onChange={(e) => setWaTestMessage(e.target.value)}
+                            placeholder="Тестовое сообщение"
+                          />
                         </div>
                       </div>
 
-                      {settings.whatsapp_source === 'amomarket' ? (
-                        <div className="admin-info-box">
-                          <strong>AmoCRM Marketplace</strong>
-                          <br />
-                          WhatsApp подключается внутри AmoCRM. Вебхук настраивать не нужно.
-                        </div>
-                      ) : (
-                        <>
-                          {/* Status based on server binding info */}
-                          <div className={`admin-status-box ${serverWhatsApp.binding_exists || isBound ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}>
-                            {serverWhatsApp.binding_exists || isBound
-                              ? '✅ Привязано — бот готов отвечать'
-                              : '⚠️ Не привязано — бот не сможет отвечать'}
-                          </div>
+                      <div className="admin-btn-group" style={{ marginTop: 12 }}>
+                        <button
+                          className="admin-btn admin-btn--accent"
+                          type="button"
+                          onClick={handleTestWhatsApp}
+                          disabled={waTestLoading}
+                        >
+                          {waTestLoading ? 'Отправка...' : '🚀 Отправить тест'}
+                        </button>
+                        <button
+                          className="admin-btn admin-btn--ghost"
+                          type="button"
+                          onClick={() => {
+                            setWaTestOpen(false)
+                            setWaTestResult(null)
+                          }}
+                        >
+                          Закрыть
+                        </button>
+                      </div>
 
-                          {/* Show masked token info if we have it from server */}
-                          {(serverWhatsApp.token_masked || settings.chatflow_token_masked) && (
-                            <div className="admin-info-box">
-                              <strong>Текущий токен:</strong> {serverWhatsApp.token_masked || settings.chatflow_token_masked}
-                              <br />
-                              <small>Оставьте поле пустым, чтобы сохранить текущий токен. Введите новый токен, чтобы обновить.</small>
-                            </div>
+                      {waTestResult && (
+                        <div className={`admin-alert ${waTestResult.ok ? 'admin-alert--success' : 'admin-alert--error'}`} style={{ marginTop: 12 }}>
+                          <strong>{waTestResult.ok ? '✅' : '❌'} {waTestResult.message}</strong>
+                          {waTestResult.details && (
+                            <pre style={{ marginTop: 8, fontSize: 11, overflow: 'auto', maxHeight: 150 }}>
+                              {waTestResult.details}
+                            </pre>
                           )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
-                          <div className="admin-form-grid">
-                            <div className="admin-settings-block">
-                              <label className="admin-label">
-                                ChatFlow Token (JWT)
-                                {dirtyFields.has('chatflow_token') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
-                              </label>
-                              <textarea
-                                className="admin-input admin-input--textarea"
-                                value={settings.chatflow_token ?? ''}
-                                onChange={(e) => {
-                                  setSettings({ ...settings, chatflow_token: e.target.value })
-                                  setDirtyFields(prev => new Set(prev).add('chatflow_token'))
-                                }}
-                                placeholder={serverWhatsApp.token_masked ? '(оставьте пустым для сохранения текущего)' : 'eyJhbGciOiJIUzI1NiIs...'}
-                                rows={3}
-                              />
-                            </div>
+              {/* READY STATE - AmoCRM Tab */}
+              {settingsStatus === 'ready' && activeTab === 'amocrm' && (
+                <div className="admin-settings-section">
+                  {amoLoading ? (
+                    <div className="admin-loading-panel">
+                      <div className="admin-spinner" />
+                      <p>Загрузка статуса...</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        className={`admin-status-box ${amoStatus?.connected ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}
+                      >
+                        {amoStatus?.connected ? '✅ AmoCRM подключён' : '⚠️ AmoCRM не подключён'}
+                      </div>
 
-                            <div className="admin-settings-block">
-                              <label className="admin-label">
-                                Instance ID
-                                {dirtyFields.has('chatflow_instance_id') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
-                              </label>
-                              <input
-                                className="admin-input"
-                                type="text"
-                                value={settings.chatflow_instance_id ?? ''}
-                                onChange={(e) => {
-                                  setSettings({ ...settings, chatflow_instance_id: e.target.value })
-                                  setDirtyFields(prev => new Set(prev).add('chatflow_instance_id'))
-                                }}
-                                placeholder="ID инстанса (QR в ChatFlow)"
-                              />
-                            </div>
-
-                            <div className="admin-settings-block">
-                              <label className="admin-label">
-                                Номер телефона
-                                {dirtyFields.has('chatflow_phone_number') && <span style={{ color: '#f59e0b', marginLeft: 8 }}>● изменено</span>}
-                              </label>
-                              <input
-                                className="admin-input"
-                                type="text"
-                                value={settings.chatflow_phone_number ?? ''}
-                                onChange={(e) => {
-                                  setSettings({ ...settings, chatflow_phone_number: e.target.value })
-                                  setDirtyFields(prev => new Set(prev).add('chatflow_phone_number'))
-                                }}
-                                placeholder="+77001234567"
-                              />
-                            </div>
-
-                            <div className="admin-settings-block">
-                              <div className="admin-settings-row">
-                                <span className="admin-label" style={{ marginBottom: 0 }}>
-                                  Активен
-                                </span>
-                                <label className="admin-switch">
-                                  <input
-                                    type="checkbox"
-                                    checked={settings.chatflow_active !== false}
-                                    onChange={(e) => setSettings({ ...settings, chatflow_active: e.target.checked })}
-                                  />
-                                  <span className="admin-switch-track">
-                                    <span className="admin-switch-thumb" />
-                                  </span>
-                                </label>
-                              </div>
-                            </div>
-                          </div>
-                        </>
+                      {amoStatus?.connected && (
+                        <div className="admin-info-box">
+                          <strong>Домен:</strong> {amoStatus.domain || '—'}
+                          <br />
+                          <strong>Истекает:</strong>{' '}
+                          {amoStatus.expires_at ? new Date(amoStatus.expires_at).toLocaleString() : '—'}
+                        </div>
                       )}
 
-                      {actionError && <div className="admin-alert admin-alert--error">{actionError}</div>}
+                      <div className="admin-settings-block">
+                        <label className="admin-label">Домен AmoCRM</label>
+                        <div className="admin-form-row-inline">
+                          <input
+                            className="admin-input"
+                            type="text"
+                            value={amoBaseDomain}
+                            onChange={(e) => setAmoBaseDomain(e.target.value)}
+                            onBlur={(e) => {
+                              // Normalize domain on blur (extract hostname from full URL)
+                              const normalized = normalizeAmoDomain(e.target.value)
+                              if (normalized && normalized !== e.target.value) {
+                                setAmoBaseDomain(normalized)
+                              }
+                            }}
+                            placeholder="mycompany.amocrm.ru"
+                          />
+                          <button
+                            className="admin-btn admin-btn--secondary"
+                            type="button"
+                            onClick={handleSaveAmoDomain}
+                            disabled={actionStatus === 'loading'}
+                          >
+                            Сохранить
+                          </button>
+                        </div>
+                        <div className="admin-settings-hint" style={{ marginTop: 4 }}>
+                          Можно вставить ссылку целиком, например: https://company.amocrm.ru/leads/
+                        </div>
+                      </div>
 
                       <div className="admin-btn-group">
                         <button
                           className="admin-btn admin-btn--primary"
                           type="button"
-                          onClick={handleSaveWhatsApp}
+                          onClick={handleConnectAmo}
                           disabled={actionStatus === 'loading'}
                         >
-                          {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить привязку'}
+                          {amoStatus?.connected ? 'Переподключить' : 'Подключить AmoCRM'}
                         </button>
-
-                        {(serverWhatsApp.binding_exists || isBound) && (
-                          <button
-                            className="admin-btn admin-btn--secondary"
-                            type="button"
-                            onClick={() => setWaTestOpen(true)}
-                          >
-                            📱 Проверить WhatsApp
-                          </button>
-                        )}
+                        <button
+                          className="admin-btn admin-btn--ghost"
+                          type="button"
+                          onClick={handleRefreshAmoStatus}
+                          disabled={amoLoading}
+                        >
+                          Обновить статус
+                        </button>
+                        <button
+                          className="admin-btn admin-btn--ghost"
+                          type="button"
+                          onClick={() => setHelpOpen(true)}
+                        >
+                          ❓ Как подключить
+                        </button>
                       </div>
 
-                      {/* WhatsApp Test Panel */}
-                      {waTestOpen && (
-                        <div className="admin-test-panel" style={{ marginTop: 16 }}>
+                      {amoStatus?.connected && (
+                        <div className="admin-settings-block" style={{ marginTop: 24 }}>
                           <div className="admin-divider" />
-                          <h4 className="admin-subtitle">Тест отправки сообщения</h4>
+                          <label className="admin-label">Воронки и стадии AmoCRM</label>
 
-                          <div className="admin-form-grid">
-                            <div className="admin-settings-block">
-                              <label className="admin-label">Номер телефона (получатель)</label>
-                              <input
-                                className="admin-input"
-                                type="text"
-                                value={waTestPhone}
-                                onChange={(e) => setWaTestPhone(e.target.value)}
-                                placeholder="+77001234567"
-                              />
-                            </div>
-
-                            <div className="admin-settings-block">
-                              <label className="admin-label">Текст сообщения</label>
-                              <input
-                                className="admin-input"
-                                type="text"
-                                value={waTestMessage}
-                                onChange={(e) => setWaTestMessage(e.target.value)}
-                                placeholder="Тестовое сообщение"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="admin-btn-group" style={{ marginTop: 12 }}>
+                          {/* Load pipelines button */}
+                          <div className="admin-btn-group" style={{ marginBottom: 16 }}>
                             <button
-                              className="admin-btn admin-btn--accent"
+                              className="admin-btn admin-btn--secondary"
                               type="button"
-                              onClick={handleTestWhatsApp}
-                              disabled={waTestLoading}
+                              onClick={() => activeTenant && loadPipelines(activeTenant.id)}
+                              disabled={pipelinesLoading}
                             >
-                              {waTestLoading ? 'Отправка...' : '🚀 Отправить тест'}
-                            </button>
-                            <button
-                              className="admin-btn admin-btn--ghost"
-                              type="button"
-                              onClick={() => {
-                                setWaTestOpen(false)
-                                setWaTestResult(null)
-                              }}
-                            >
-                              Закрыть
+                              {pipelinesLoading ? 'Загрузка...' : '📥 Загрузить воронки'}
                             </button>
                           </div>
 
-                          {waTestResult && (
-                            <div className={`admin-alert ${waTestResult.ok ? 'admin-alert--success' : 'admin-alert--error'}`} style={{ marginTop: 12 }}>
-                              <strong>{waTestResult.ok ? '✅' : '❌'} {waTestResult.message}</strong>
-                              {waTestResult.details && (
-                                <pre style={{ marginTop: 8, fontSize: 11, overflow: 'auto', maxHeight: 150 }}>
-                                  {waTestResult.details}
-                                </pre>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* READY STATE - AmoCRM Tab */}
-                  {settingsStatus === 'ready' && activeTab === 'amocrm' && (
-                    <div className="admin-settings-section">
-                      {amoLoading ? (
-                        <div className="admin-loading-panel">
-                          <div className="admin-spinner" />
-                          <p>Загрузка статуса...</p>
-                        </div>
-                      ) : (
-                        <>
-                          <div
-                            className={`admin-status-box ${amoStatus?.connected ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}
-                          >
-                            {amoStatus?.connected ? '✅ AmoCRM подключён' : '⚠️ AmoCRM не подключён'}
-                          </div>
-
-                          {amoStatus?.connected && (
-                            <div className="admin-info-box">
-                              <strong>Домен:</strong> {amoStatus.domain || '—'}
-                              <br />
-                              <strong>Истекает:</strong>{' '}
-                              {amoStatus.expires_at ? new Date(amoStatus.expires_at).toLocaleString() : '—'}
-                            </div>
-                          )}
-
-                          <div className="admin-settings-block">
-                            <label className="admin-label">Домен AmoCRM</label>
-                            <div className="admin-form-row-inline">
-                              <input
+                          {/* Pipeline selector */}
+                          {amoPipelines.length > 0 && (
+                            <div className="admin-settings-block">
+                              <label className="admin-label">Выберите воронку</label>
+                              <select
                                 className="admin-input"
-                                type="text"
-                                value={amoBaseDomain}
-                                onChange={(e) => setAmoBaseDomain(e.target.value)}
-                                onBlur={(e) => {
-                                  // Normalize domain on blur (extract hostname from full URL)
-                                  const normalized = normalizeAmoDomain(e.target.value)
-                                  if (normalized && normalized !== e.target.value) {
-                                    setAmoBaseDomain(normalized)
+                                value={selectedPipelineId}
+                                onChange={(e) => {
+                                  setSelectedPipelineId(e.target.value)
+                                  if (e.target.value && activeTenant) {
+                                    loadStages(activeTenant.id, e.target.value)
                                   }
                                 }}
-                                placeholder="mycompany.amocrm.ru"
-                              />
-                              <button
-                                className="admin-btn admin-btn--secondary"
-                                type="button"
-                                onClick={handleSaveAmoDomain}
-                                disabled={actionStatus === 'loading'}
                               >
-                                Сохранить
-                              </button>
+                                <option value="">— Выберите воронку —</option>
+                                {amoPipelines.map(p => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name} {p.is_main ? '(основная)' : ''}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
-                            <div className="admin-settings-hint" style={{ marginTop: 4 }}>
-                              Можно вставить ссылку целиком, например: https://company.amocrm.ru/leads/
+                          )}
+
+                          {/* Stages list */}
+                          {stagesLoading && (
+                            <div className="admin-loading-panel" style={{ padding: 16 }}>
+                              <div className="admin-spinner admin-spinner--sm" />
+                              <span>Загрузка стадий...</span>
                             </div>
-                          </div>
+                          )}
 
-                          <div className="admin-btn-group">
-                            <button
-                              className="admin-btn admin-btn--primary"
-                              type="button"
-                              onClick={handleConnectAmo}
-                              disabled={actionStatus === 'loading'}
-                            >
-                              {amoStatus?.connected ? 'Переподключить' : 'Подключить AmoCRM'}
-                            </button>
-                            <button
-                              className="admin-btn admin-btn--ghost"
-                              type="button"
-                              onClick={handleRefreshAmoStatus}
-                              disabled={amoLoading}
-                            >
-                              Обновить статус
-                            </button>
-                            <button
-                              className="admin-btn admin-btn--ghost"
-                              type="button"
-                              onClick={() => setHelpOpen(true)}
-                            >
-                              ❓ Как подключить
-                            </button>
-                          </div>
-
-                          {amoStatus?.connected && (
-                            <div className="admin-settings-block" style={{ marginTop: 24 }}>
-                              <div className="admin-divider" />
-                              <label className="admin-label">Воронки и стадии AmoCRM</label>
-
-                              {/* Load pipelines button */}
-                              <div className="admin-btn-group" style={{ marginBottom: 16 }}>
-                                <button
-                                  className="admin-btn admin-btn--secondary"
-                                  type="button"
-                                  onClick={() => activeTenant && loadPipelines(activeTenant.id)}
-                                  disabled={pipelinesLoading}
-                                >
-                                  {pipelinesLoading ? 'Загрузка...' : '📥 Загрузить воронки'}
-                                </button>
-                              </div>
-
-                              {/* Pipeline selector */}
-                              {amoPipelines.length > 0 && (
-                                <div className="admin-settings-block">
-                                  <label className="admin-label">Выберите воронку</label>
-                                  <select
-                                    className="admin-input"
-                                    value={selectedPipelineId}
-                                    onChange={(e) => {
-                                      setSelectedPipelineId(e.target.value)
-                                      if (e.target.value && activeTenant) {
-                                        loadStages(activeTenant.id, e.target.value)
-                                      }
-                                    }}
-                                  >
-                                    <option value="">— Выберите воронку —</option>
-                                    {amoPipelines.map(p => (
-                                      <option key={p.id} value={p.id}>
-                                        {p.name} {p.is_main ? '(основная)' : ''}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )}
-
-                              {/* Stages list */}
-                              {stagesLoading && (
-                                <div className="admin-loading-panel" style={{ padding: 16 }}>
-                                  <div className="admin-spinner admin-spinner--sm" />
-                                  <span>Загрузка стадий...</span>
-                                </div>
-                              )}
-
-                              {!stagesLoading && amoStages.length > 0 && (
-                                <div className="admin-settings-block">
-                                  <label className="admin-label">Стадии воронки</label>
-                                  <div className="admin-stages-list">
-                                    {amoStages.map(stage => (
-                                      <div key={stage.id} className="admin-stage-item">
-                                        <span className="admin-stage-name">{stage.name}</span>
-                                        <span className="admin-stage-id">ID: {stage.id}</span>
-                                        {stage.is_won && <span className="admin-badge admin-badge--ok">Won</span>}
-                                        {stage.is_lost && <span className="admin-badge admin-badge--off">Lost</span>}
-                                      </div>
-                                    ))}
+                          {!stagesLoading && amoStages.length > 0 && (
+                            <div className="admin-settings-block">
+                              <label className="admin-label">Стадии воронки</label>
+                              <div className="admin-stages-list">
+                                {amoStages.map(stage => (
+                                  <div key={stage.id} className="admin-stage-item">
+                                    <span className="admin-stage-name">{stage.name}</span>
+                                    <span className="admin-stage-id">ID: {stage.id}</span>
+                                    {stage.is_won && <span className="admin-badge admin-badge--ok">Won</span>}
+                                    {stage.is_lost && <span className="admin-badge admin-badge--off">Lost</span>}
                                   </div>
-
-                                  <button
-                                    className="admin-btn admin-btn--accent"
-                                    type="button"
-                                    onClick={handleAutoFillMapping}
-                                    style={{ marginTop: 12 }}
-                                  >
-                                    ✨ Автозаполнить маппинг по названиям
-                                  </button>
-                                </div>
-                              )}
-
-                              <div className="admin-divider" />
-
-                              {/* Mapping table */}
-                              <label className="admin-label">Маппинг стадий</label>
-                              <div className="admin-settings-hint" style={{ marginBottom: 12 }}>
-                                Укажите ID стадий из вашей воронки AmoCRM для каждого статуса лида.
+                                ))}
                               </div>
-                              <table className="admin-mapping-table">
-                                <thead>
-                                  <tr>
-                                    <th>Статус лида</th>
-                                    <th>Stage ID</th>
-                                    <th>Быстрый выбор</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {amoMapping.map((m, i) => (
-                                    <tr key={m.stage_key}>
-                                      <td>{STAGE_KEY_LABELS[m.stage_key] || m.stage_key}</td>
-                                      <td>
-                                        <input
-                                          className="admin-input"
-                                          type="text"
-                                          value={m.stage_id ?? ''}
-                                          onChange={(e) => {
-                                            const val = e.target.value.trim()
-                                            setAmoMapping((prev) =>
-                                              prev.map((x, j) => (j === i ? { ...x, stage_id: val || null } : x))
-                                            )
-                                          }}
-                                          placeholder="ID стадии"
-                                        />
-                                      </td>
-                                      <td>
-                                        {amoStages.length > 0 && (
-                                          <select
-                                            className="admin-input admin-input--sm"
-                                            value={m.stage_id ?? ''}
-                                            onChange={(e) => {
-                                              const val = e.target.value
-                                              setAmoMapping((prev) =>
-                                                prev.map((x, j) => (j === i ? { ...x, stage_id: val || null } : x))
-                                              )
-                                            }}
-                                          >
-                                            <option value="">—</option>
-                                            {amoStages.map(s => (
-                                              <option key={s.id} value={s.id}>
-                                                {s.name}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+
                               <button
-                                className="admin-btn admin-btn--primary"
+                                className="admin-btn admin-btn--accent"
                                 type="button"
-                                onClick={handleSaveAmoMapping}
-                                disabled={actionStatus === 'loading'}
+                                onClick={handleAutoFillMapping}
                                 style={{ marginTop: 12 }}
                               >
-                                {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить маппинг'}
+                                ✨ Автозаполнить маппинг по названиям
                               </button>
                             </div>
                           )}
 
-                          {actionError && (
-                            <div className="admin-alert admin-alert--error" style={{ marginTop: 16 }}>
-                              {actionError}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-          </div>
-          </div>
-      )}
+                          <div className="admin-divider" />
 
-          {/* Users Modal */}
-          {usersOpen && activeTenant && (
-            <div className="admin-modal-backdrop" onClick={closeUsers}>
-              <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="admin-modal-header">
-                  <h2 className="admin-modal-title">Пользователи — {activeTenant.name}</h2>
-                  <button className="admin-modal-close" type="button" onClick={closeUsers}>
-                    ×
-                  </button>
-                </div>
-                <div className="admin-modal-body">
-                  {tenantUsersError && <div className="admin-alert admin-alert--error">{tenantUsersError}</div>}
-                  {tenantUsersStatus === 'loading' ? (
-                    <div className="admin-loading">Загрузка...</div>
-                  ) : tenantUsers.length === 0 && !tenantUsersError ? (
-                    <div className="admin-empty">Пользователей пока нет</div>
-                  ) : (
-                    <div className="admin-users-list">
-                      {tenantUsers.map((u) => (
-                        <div className="admin-user-item" key={u.id}>
-                          <div className="admin-user-email">{u.email}</div>
-                          <span className={`admin-badge ${u.role === 'admin' ? 'admin-badge--ok' : 'admin-badge--neutral'}`}>
-                            {u.role === 'admin' ? 'Админ' : 'Менеджер'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="admin-divider" />
-
-                  <h3 className="admin-subtitle">Добавить пользователя</h3>
-                  <form onSubmit={handleAddUserSubmit}>
-                    <div className="admin-form-row">
-                      <input
-                        className="admin-input"
-                        type="email"
-                        value={addUserForm.email}
-                        onChange={(e) => setAddUserForm((p) => ({ ...p, email: e.target.value }))}
-                        placeholder="user@company.ru"
-                        required
-                      />
-                      <select
-                        className="admin-input"
-                        value={addUserForm.role}
-                        onChange={(e) => setAddUserForm((p) => ({ ...p, role: e.target.value as 'manager' | 'admin' }))}
-                      >
-                        <option value="manager">Менеджер</option>
-                        <option value="admin">Админ</option>
-                      </select>
-                      <button className="admin-btn admin-btn--primary" type="submit" disabled={actionStatus === 'loading'}>
-                        {actionStatus === 'loading' ? '...' : 'Добавить'}
-                      </button>
-                    </div>
-                    {actionError && (
-                      <div className="admin-alert admin-alert--error" style={{ marginTop: 12 }}>
-                        {actionError}
-                      </div>
-                    )}
-                  </form>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Self-Check Modal */}
-          {checkOpen && activeTenant && (
-            <div className="admin-modal-backdrop" onClick={closeCheck}>
-              <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="admin-modal-header">
-                  <h2 className="admin-modal-title">Проверка — {activeTenant.name}</h2>
-                  <button className="admin-modal-close" type="button" onClick={closeCheck}>
-                    ×
-                  </button>
-                </div>
-                <div className="admin-modal-body">
-                  {checkLoading && (
-                    <div className="admin-loading-panel">
-                      <div className="admin-spinner" />
-                      <p>Проверяем настройки...</p>
-                    </div>
-                  )}
-
-                  {!checkLoading && checkResult && (
-                    <>
-                      <div
-                        className={`admin-status-box ${checkResult.all_ok ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}
-                        style={{ marginBottom: 16 }}
-                      >
-                        {checkResult.all_ok ? '✅ Все проверки пройдены!' : '⚠️ Есть проблемы — см. ниже'}
-                      </div>
-
-                      <div className="admin-check-list">
-                        {checkResult.checks.map((c) => (
-                          <div
-                            key={c.key}
-                            className={`admin-check-item ${c.ok ? 'admin-check-item--ok' : 'admin-check-item--error'}`}
-                          >
-                            <div className="admin-check-icon">{c.ok ? '✅' : '❌'}</div>
-                            <div className="admin-check-content">
-                              <div className="admin-check-label">{c.label || c.key}</div>
-                              {c.message && <div className="admin-check-message">{c.message}</div>}
-                              {!c.message && !c.ok && <div className="admin-check-message">Требуется настройка</div>}
-                            </div>
-                            {c.action && !c.ok && (
-                              <button
-                                className="admin-btn admin-btn--sm admin-btn--secondary"
-                                type="button"
-                                onClick={() => handleCheckAction(c.action!)}
-                              >
-                                Исправить
-                              </button>
-                            )}
+                          {/* Mapping table */}
+                          <label className="admin-label">Маппинг стадий</label>
+                          <div className="admin-settings-hint" style={{ marginBottom: 12 }}>
+                            Укажите ID стадий из вашей воронки AmoCRM для каждого статуса лида.
                           </div>
-                        ))}
-                      </div>
+                          <table className="admin-mapping-table">
+                            <thead>
+                              <tr>
+                                <th>Статус лида</th>
+                                <th>Stage ID</th>
+                                <th>Быстрый выбор</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {amoMapping.map((m, i) => (
+                                <tr key={m.stage_key}>
+                                  <td>{STAGE_KEY_LABELS[m.stage_key] || m.stage_key}</td>
+                                  <td>
+                                    <input
+                                      className="admin-input"
+                                      type="text"
+                                      value={m.stage_id ?? ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value.trim()
+                                        setAmoMapping((prev) =>
+                                          prev.map((x, j) => (j === i ? { ...x, stage_id: val || null } : x))
+                                        )
+                                      }}
+                                      placeholder="ID стадии"
+                                    />
+                                  </td>
+                                  <td>
+                                    {amoStages.length > 0 && (
+                                      <select
+                                        className="admin-input admin-input--sm"
+                                        value={m.stage_id ?? ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value
+                                          setAmoMapping((prev) =>
+                                            prev.map((x, j) => (j === i ? { ...x, stage_id: val || null } : x))
+                                          )
+                                        }}
+                                      >
+                                        <option value="">—</option>
+                                        {amoStages.map(s => (
+                                          <option key={s.id} value={s.id}>
+                                            {s.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <button
+                            className="admin-btn admin-btn--primary"
+                            type="button"
+                            onClick={handleSaveAmoMapping}
+                            disabled={actionStatus === 'loading'}
+                            style={{ marginTop: 12 }}
+                          >
+                            {actionStatus === 'loading' ? 'Сохраняю...' : 'Сохранить маппинг'}
+                          </button>
+                        </div>
+                      )}
+
+                      {actionError && (
+                        <div className="admin-alert admin-alert--error" style={{ marginTop: 16 }}>
+                          {actionError}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          </div>
+        </div>
+      )}
 
-          {/* AmoCRM Help Modal */}
-          {helpOpen && (
-            <div className="admin-modal-backdrop" onClick={() => setHelpOpen(false)}>
-              <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="admin-modal-header">
-                  <h2 className="admin-modal-title">Как подключить AmoCRM</h2>
-                  <button className="admin-modal-close" type="button" onClick={() => setHelpOpen(false)}>
-                    ×
-                  </button>
-                </div>
-                <div className="admin-modal-body">
-                  <div className="admin-help-steps">
-                    <div className="admin-help-step">
-                      <div className="admin-help-step-number">1</div>
-                      <div className="admin-help-step-content">
-                        <strong>Создайте интеграцию в AmoCRM</strong>
-                        <p>Перейдите в AmoCRM → Настройки → Интеграции → Создать интеграцию</p>
+      {/* Users Modal */}
+      {
+        usersOpen && activeTenant && (
+          <div className="admin-modal-backdrop" onClick={closeUsers}>
+            <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
+                <h2 className="admin-modal-title">Пользователи — {activeTenant.name}</h2>
+                <button className="admin-modal-close" type="button" onClick={closeUsers}>
+                  ×
+                </button>
+              </div>
+              <div className="admin-modal-body">
+                {tenantUsersError && <div className="admin-alert admin-alert--error">{tenantUsersError}</div>}
+                {tenantUsersStatus === 'loading' ? (
+                  <div className="admin-loading">Загрузка...</div>
+                ) : tenantUsers.length === 0 && !tenantUsersError ? (
+                  <div className="admin-empty">Пользователей пока нет</div>
+                ) : (
+                  <div className="admin-users-list">
+                    {tenantUsers.map((u) => (
+                      <div className="admin-user-item" key={u.id}>
+                        <div className="admin-user-email">{u.email}</div>
+                        <span className={`admin-badge ${u.role === 'admin' ? 'admin-badge--ok' : 'admin-badge--neutral'}`}>
+                          {u.role === 'admin' ? 'Админ' : 'Менеджер'}
+                        </span>
                       </div>
-                    </div>
-                    <div className="admin-help-step">
-                      <div className="admin-help-step-number">2</div>
-                      <div className="admin-help-step-content">
-                        <strong>Укажите Redirect URL</strong>
-                        <p>Вставьте этот URL в настройках интеграции:</p>
-                        <code className="admin-help-code">{BASE_URL}/api/integrations/amocrm/callback</code>
-                        <button
-                          className="admin-btn admin-btn--sm admin-btn--ghost"
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(`${BASE_URL}/api/integrations/amocrm/callback`)
-                            showToast('URL скопирован')
-                          }}
-                        >
-                          📋 Копировать
-                        </button>
-                      </div>
-                    </div>
-                    <div className="admin-help-step">
-                      <div className="admin-help-step-number">3</div>
-                      <div className="admin-help-step-content">
-                        <strong>Скопируйте client_id и client_secret</strong>
-                        <p>Эти данные нужно добавить в переменные окружения на Render (или где развёрнут backend)</p>
-                      </div>
-                    </div>
-                    <div className="admin-help-step">
-                      <div className="admin-help-step-number">4</div>
-                      <div className="admin-help-step-content">
-                        <strong>Введите домен AmoCRM</strong>
-                        <p>В поле выше укажите ваш домен (например: company.amocrm.ru) и нажмите Сохранить</p>
-                      </div>
-                    </div>
-                    <div className="admin-help-step">
-                      <div className="admin-help-step-number">5</div>
-                      <div className="admin-help-step-content">
-                        <strong>Нажмите "Подключить AmoCRM"</strong>
-                        <p>Откроется окно авторизации. После успешного входа вернитесь сюда и обновите статус.</p>
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                  <div className="admin-modal-footer">
-                    <button className="admin-btn admin-btn--primary" type="button" onClick={() => setHelpOpen(false)}>
-                      Понятно
+                )}
+
+                <div className="admin-divider" />
+
+                <h3 className="admin-subtitle">Добавить пользователя</h3>
+                <form onSubmit={handleAddUserSubmit}>
+                  <div className="admin-form-row">
+                    <input
+                      className="admin-input"
+                      type="email"
+                      value={addUserForm.email}
+                      onChange={(e) => setAddUserForm((p) => ({ ...p, email: e.target.value }))}
+                      placeholder="user@company.ru"
+                      required
+                    />
+                    <select
+                      className="admin-input"
+                      value={addUserForm.role}
+                      onChange={(e) => setAddUserForm((p) => ({ ...p, role: e.target.value as 'manager' | 'admin' }))}
+                    >
+                      <option value="manager">Менеджер</option>
+                      <option value="admin">Админ</option>
+                    </select>
+                    <button className="admin-btn admin-btn--primary" type="submit" disabled={actionStatus === 'loading'}>
+                      {actionStatus === 'loading' ? '...' : 'Добавить'}
                     </button>
                   </div>
+                  {actionError && (
+                    <div className="admin-alert admin-alert--error" style={{ marginTop: 12 }}>
+                      {actionError}
+                    </div>
+                  )}
+                </form>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Self-Check Modal */}
+      {
+        checkOpen && activeTenant && (
+          <div className="admin-modal-backdrop" onClick={closeCheck}>
+            <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
+                <h2 className="admin-modal-title">Проверка — {activeTenant.name}</h2>
+                <button className="admin-modal-close" type="button" onClick={closeCheck}>
+                  ×
+                </button>
+              </div>
+              <div className="admin-modal-body">
+                {checkLoading && (
+                  <div className="admin-loading-panel">
+                    <div className="admin-spinner" />
+                    <p>Проверяем настройки...</p>
+                  </div>
+                )}
+
+                {!checkLoading && checkResult && (
+                  <>
+                    <div
+                      className={`admin-status-box ${checkResult.all_ok ? 'admin-status-box--ok' : 'admin-status-box--warn'}`}
+                      style={{ marginBottom: 16 }}
+                    >
+                      {checkResult.all_ok ? '✅ Все проверки пройдены!' : '⚠️ Есть проблемы — см. ниже'}
+                    </div>
+
+                    <div className="admin-check-list">
+                      {checkResult.checks.map((c) => (
+                        <div
+                          key={c.key}
+                          className={`admin-check-item ${c.ok ? 'admin-check-item--ok' : 'admin-check-item--error'}`}
+                        >
+                          <div className="admin-check-icon">{c.ok ? '✅' : '❌'}</div>
+                          <div className="admin-check-content">
+                            <div className="admin-check-label">{c.label || c.key}</div>
+                            {c.message && <div className="admin-check-message">{c.message}</div>}
+                            {!c.message && !c.ok && <div className="admin-check-message">Требуется настройка</div>}
+                          </div>
+                          {c.action && !c.ok && (
+                            <button
+                              className="admin-btn admin-btn--sm admin-btn--secondary"
+                              type="button"
+                              onClick={() => handleCheckAction(c.action!)}
+                            >
+                              Исправить
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* AmoCRM Help Modal */}
+      {
+        helpOpen && (
+          <div className="admin-modal-backdrop" onClick={() => setHelpOpen(false)}>
+            <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
+                <h2 className="admin-modal-title">Как подключить AmoCRM</h2>
+                <button className="admin-modal-close" type="button" onClick={() => setHelpOpen(false)}>
+                  ×
+                </button>
+              </div>
+              <div className="admin-modal-body">
+                <div className="admin-help-steps">
+                  <div className="admin-help-step">
+                    <div className="admin-help-step-number">1</div>
+                    <div className="admin-help-step-content">
+                      <strong>Создайте интеграцию в AmoCRM</strong>
+                      <p>Перейдите в AmoCRM → Настройки → Интеграции → Создать интеграцию</p>
+                    </div>
+                  </div>
+                  <div className="admin-help-step">
+                    <div className="admin-help-step-number">2</div>
+                    <div className="admin-help-step-content">
+                      <strong>Укажите Redirect URL</strong>
+                      <p>Вставьте этот URL в настройках интеграции:</p>
+                      <code className="admin-help-code">{BASE_URL}/api/integrations/amocrm/callback</code>
+                      <button
+                        className="admin-btn admin-btn--sm admin-btn--ghost"
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${BASE_URL}/api/integrations/amocrm/callback`)
+                          showToast('URL скопирован')
+                        }}
+                      >
+                        📋 Копировать
+                      </button>
+                    </div>
+                  </div>
+                  <div className="admin-help-step">
+                    <div className="admin-help-step-number">3</div>
+                    <div className="admin-help-step-content">
+                      <strong>Скопируйте client_id и client_secret</strong>
+                      <p>Эти данные нужно добавить в переменные окружения на Render (или где развёрнут backend)</p>
+                    </div>
+                  </div>
+                  <div className="admin-help-step">
+                    <div className="admin-help-step-number">4</div>
+                    <div className="admin-help-step-content">
+                      <strong>Введите домен AmoCRM</strong>
+                      <p>В поле выше укажите ваш домен (например: company.amocrm.ru) и нажмите Сохранить</p>
+                    </div>
+                  </div>
+                  <div className="admin-help-step">
+                    <div className="admin-help-step-number">5</div>
+                    <div className="admin-help-step-content">
+                      <strong>Нажмите "Подключить AmoCRM"</strong>
+                      <p>Откроется окно авторизации. После успешного входа вернитесь сюда и обновите статус.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="admin-modal-footer">
+                  <button className="admin-btn admin-btn--primary" type="button" onClick={() => setHelpOpen(false)}>
+                    Понятно
+                  </button>
                 </div>
               </div>
             </div>
-          )}
-        </div>
-      )
+          </div>
+        )
       }
+    </div >
+  )
+}
 
-      export default AdminTenants
+export default AdminTenants

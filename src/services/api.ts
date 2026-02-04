@@ -50,7 +50,7 @@ function humanizeError(msg: string): string {
 /** Global API error parser - use this everywhere to extract meaningful error info */
 export function parseApiError(err: unknown): { status?: number; detail: string; raw?: unknown } {
   if (!err) return { detail: 'Неизвестная ошибка' }
-  
+
   // Already a DetailedApiError
   if (typeof err === 'object' && err !== null && 'detail' in err) {
     const e = err as DetailedApiError
@@ -61,7 +61,7 @@ export function parseApiError(err: unknown): { status?: number; detail: string; 
       raw: err,
     }
   }
-  
+
   // Regular Error with message
   if (err instanceof Error) {
     return {
@@ -69,12 +69,12 @@ export function parseApiError(err: unknown): { status?: number; detail: string; 
       raw: err,
     }
   }
-  
+
   // Object with detail/message
   if (typeof err === 'object' && err !== null) {
     const e = err as Record<string, unknown>
     let detail = e.detail ?? e.message ?? e.error
-    
+
     // Ensure we never return [object Object]
     if (detail && typeof detail === 'object') {
       try {
@@ -83,17 +83,17 @@ export function parseApiError(err: unknown): { status?: number; detail: string; 
         detail = 'Ошибка запроса (неизвестный формат)'
       }
     }
-    
+
     if (typeof detail === 'string') {
       return { status: e.status as number | undefined, detail: humanizeError(detail), raw: err }
     }
   }
-  
+
   // String
   if (typeof err === 'string') {
     return { detail: humanizeError(err) }
   }
-  
+
   // Fallback - never show raw objects
   try {
     const str = JSON.stringify(err)
@@ -107,7 +107,7 @@ export function parseApiError(err: unknown): { status?: number; detail: string; 
 export function normalizeAmoDomain(input: string): string {
   if (!input) return ''
   const trimmed = input.trim()
-  
+
   // If it looks like a full URL, extract hostname
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     try {
@@ -119,7 +119,7 @@ export function normalizeAmoDomain(input: string): string {
       if (match) return match[1]
     }
   }
-  
+
   // Remove trailing slashes and paths
   return trimmed.replace(/\/.*$/, '').replace(/^www\./, '')
 }
@@ -292,12 +292,12 @@ export const login = async (email: string, password: string) => {
   let response: Response
   try {
     response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body,
-  })
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    })
   } catch (e) {
     if (import.meta.env.DEV) {
       console.error('[api] login fetch failed', { url, error: e })
@@ -478,8 +478,8 @@ function extractV2LeadsTable(data: unknown): V2LeadsTableResult {
   const arr = Array.isArray(list) ? list : []
   const total = (json != null && typeof json === 'object' && !Array.isArray(json))
     ? (typeof (json as Record<string, unknown>).total === 'number'
-        ? (json as Record<string, unknown>).total as number
-        : arr.length)
+      ? (json as Record<string, unknown>).total as number
+      : arr.length)
     : arr.length
   console.log('leads raw json', json)
   console.log('normalized list length', arr.length)
@@ -518,7 +518,7 @@ export const updateLeadStatus = async (id: string, status: LeadStatus) => {
 /** PATCH /api/leads/{id} — status, next_call_at, etc. */
 export const updateLeadFields = async (
   id: string,
-  payload: { status?: LeadStatus; next_call_at?: string | null; [key: string]: unknown },
+  payload: { status?: LeadStatus; next_call_at?: string | null;[key: string]: unknown },
 ) => {
   const data = await request<unknown>(`/api/leads/${id}`, {
     method: 'PATCH',
@@ -867,8 +867,8 @@ export const postLeadComment = async (
               : response.status >= 500
                 ? 'Ошибка сервера'
                 : typeof responseJson === 'object' &&
-                    responseJson !== null &&
-                    'message' in responseJson
+                  responseJson !== null &&
+                  'message' in responseJson
                   ? String((responseJson as { message: unknown }).message)
                   : 'Не удалось добавить комментарий'
     const error = new Error(message) as ApiError
@@ -986,11 +986,15 @@ export type AdminTenant = {
 
 export type TenantWhatsapp = {
   id?: string | number
-  phone_number: string
-  phone_number_id: string
-  is_active: boolean
+  phone_number?: string
+  phone_number_id?: string
+  is_active?: boolean
   verify_token?: string | null
   waba_id?: string | null
+  // ChatFlow fields
+  token?: string
+  instance_id?: string
+  active?: boolean
 }
 
 const extractAdminTenants = (data: unknown): AdminTenant[] => {
@@ -1215,7 +1219,7 @@ export const testWhatsApp = async (
 ): Promise<WhatsAppTestResult> => {
   const url = fullUrl(`/api/admin/tenants/${tenantId}/whatsapp/test`)
   let response: Response
-  
+
   try {
     response = await fetch(url, {
       method: 'POST',
@@ -1235,7 +1239,7 @@ export const testWhatsApp = async (
       details: e instanceof Error ? e.message : String(e),
     }
   }
-  
+
   let data: Record<string, unknown> = {}
   const text = await response.text()
   if (text) {
@@ -1245,7 +1249,7 @@ export const testWhatsApp = async (
       data = { raw: text }
     }
   }
-  
+
   // Handle auth errors specially
   if (response.status === 401 || response.status === 403) {
     return {
@@ -1255,7 +1259,7 @@ export const testWhatsApp = async (
       status: response.status,
     }
   }
-  
+
   if (response.ok && data.ok !== false) {
     return {
       ok: true,
@@ -1263,16 +1267,16 @@ export const testWhatsApp = async (
       details: JSON.stringify(data, null, 2),
     }
   }
-  
+
   // Extract error message
-  const errorMsg = typeof data.detail === 'string' 
-    ? data.detail 
+  const errorMsg = typeof data.detail === 'string'
+    ? data.detail
     : typeof data.message === 'string'
       ? data.message
       : typeof data.error === 'string'
         ? data.error
         : `Ошибка ${response.status}`
-  
+
   return {
     ok: false,
     message: errorMsg,
@@ -1854,20 +1858,20 @@ function normalizeTenantSettings(raw: unknown, tenantId?: string | number): Tena
   if (!raw || typeof raw !== 'object') {
     return { id: tenantId }
   }
-  
+
   const r = raw as Record<string, unknown>
-  
+
   // Backend may return nested structure: { settings: {...}, whatsapp: {...}, amocrm: {...} }
   // OR flat structure directly
   const settings = (r.settings && typeof r.settings === 'object' ? r.settings : r) as Record<string, unknown>
   const whatsapp = (r.whatsapp && typeof r.whatsapp === 'object' ? r.whatsapp : r) as Record<string, unknown>
   const amocrm = (r.amocrm && typeof r.amocrm === 'object' ? r.amocrm : r) as Record<string, unknown>
-  
+
   // Extract values with priority: nested object > flat > null
   const ai_prompt = settings.ai_prompt ?? r.ai_prompt ?? null
   const ai_enabled = settings.ai_enabled_global ?? settings.ai_enabled ?? r.ai_enabled ?? r.ai_enabled_global
   const ai_behavior = settings.ai_after_lead_submitted_behavior ?? settings.ai_after_submit_behavior ?? r.ai_after_submit_behavior ?? 'polite_close'
-  
+
   // WhatsApp fields - check both nested and flat
   const wa_source = (settings.whatsapp_source ?? whatsapp.whatsapp_source ?? r.whatsapp_source ?? 'chatflow') as TenantSettings['whatsapp_source']
   const cf_token = (whatsapp.chatflow_token ?? whatsapp.token ?? r.chatflow_token ?? null) as string | null
@@ -1877,17 +1881,17 @@ function normalizeTenantSettings(raw: unknown, tenantId?: string | number): Tena
   const cf_active = whatsapp.chatflow_active ?? whatsapp.active ?? whatsapp.is_active ?? r.chatflow_active
   const cf_binding = whatsapp.binding_exists ?? whatsapp.chatflow_binding_exists ?? r.chatflow_binding_exists
   const cf_health = whatsapp.health_ok ?? whatsapp.chatflow_health_ok ?? r.chatflow_health_ok
-  
+
   // AmoCRM fields
   const amo_connected = amocrm.connected ?? r.amocrm_connected ?? false
   const amo_domain = (amocrm.domain ?? amocrm.base_domain ?? r.amocrm_domain ?? null) as string | null
   const amo_base = (amocrm.base_domain ?? settings.amocrm_base_domain ?? r.amocrm_base_domain ?? null) as string | null
   const amo_expires = (amocrm.expires_at ?? r.amocrm_expires_at ?? null) as string | null
-  
+
   // Compute binding_exists if not provided
   const hasToken = Boolean(cf_token?.trim() || cf_token_masked?.trim())
   const hasInstance = Boolean(cf_instance?.trim())
-  
+
   // Get id with proper type checking
   const extractId = (): string | number | undefined => {
     if (typeof r.tenant_id === 'string' || typeof r.tenant_id === 'number') return r.tenant_id
@@ -1895,7 +1899,7 @@ function normalizeTenantSettings(raw: unknown, tenantId?: string | number): Tena
     if (typeof settings.id === 'string' || typeof settings.id === 'number') return settings.id
     return tenantId
   }
-  
+
   return {
     id: extractId(),
     name: (r.tenant_name ?? r.name ?? settings.name ?? '') as string,
@@ -1923,7 +1927,7 @@ export const getTenantSettings = async (
   const requestUrl = fullUrl(`/api/admin/tenants/${tenantId}/settings`)
   const headers = authHeaders()
   const hasAuth = Boolean((headers as Record<string, string>).Authorization)
-  
+
   let response: Response
   try {
     response = await fetch(requestUrl, { method: 'GET', headers: { ...headers } })
@@ -1982,7 +1986,7 @@ export const getTenantSettings = async (
 
   const rawData = await response.json()
   console.log('[API] getTenantSettings raw response:', rawData)
-  
+
   // Normalize the response structure
   return normalizeTenantSettings(rawData, tenantId)
 }
@@ -1993,7 +1997,7 @@ export const updateTenantSettings = async (
 ): Promise<TenantSettings | null> => {
   const requestUrl = fullUrl(`/api/admin/tenants/${tenantId}/settings`)
   const headers = authHeaders()
-  
+
   let response: Response
   try {
     response = await fetch(requestUrl, {
@@ -2012,7 +2016,7 @@ export const updateTenantSettings = async (
     }
     throw err
   }
-  
+
   if (response.status === 404) {
     // fallback: update tenant + whatsapp binding separately
     await updateAdminTenant(tenantId, {
@@ -2030,15 +2034,15 @@ export const updateTenantSettings = async (
     // Return null to indicate fallback was used - caller should refetch
     return null
   }
-  
+
   if (!response.ok) {
-    const detailedErr = await buildDetailedError(response, requestUrl, 
-      Boolean((headers as Record<string, string>).Authorization), 
+    const detailedErr = await buildDetailedError(response, requestUrl,
+      Boolean((headers as Record<string, string>).Authorization),
       { tenantId }
     )
     throw detailedErr
   }
-  
+
   // Try to return updated settings if backend provides them
   try {
     const text = await response.text()
@@ -2158,7 +2162,7 @@ export const getAmoPipelines = async (
   if (response.status === 404) return []
   if (!response.ok) throw await buildError(response)
   const data = await response.json()
-  return Array.isArray(data) ? (data as AmoPipeline[]) : 
+  return Array.isArray(data) ? (data as AmoPipeline[]) :
     (data as { pipelines?: AmoPipeline[] })?.pipelines ?? []
 }
 
@@ -2173,7 +2177,7 @@ export const getAmoStages = async (
   if (response.status === 404) return []
   if (!response.ok) throw await buildError(response)
   const data = await response.json()
-  return Array.isArray(data) ? (data as AmoStage[]) : 
+  return Array.isArray(data) ? (data as AmoStage[]) :
     (data as { stages?: AmoStage[] })?.stages ?? []
 }
 
@@ -2252,14 +2256,14 @@ export const selfCheckTenant = async (
     const settings = await getTenantSettings(tenantId).catch(() => null)
     const amoStatus = await getAmoStatus(tenantId).catch(() => ({ connected: false }))
     const checks: SelfCheckItem[] = []
-    
+
     checks.push({
       key: 'tenant_active',
       label: 'Tenant активен',
       ok: true,
       message: 'Клиент существует',
     })
-    
+
     checks.push({
       key: 'ai_enabled',
       label: 'AI включён',
@@ -2267,7 +2271,7 @@ export const selfCheckTenant = async (
       message: settings?.ai_enabled !== false ? 'AI-менеджер работает' : 'AI выключен — бот не отвечает',
       action: settings?.ai_enabled === false ? 'open_ai' : undefined,
     })
-    
+
     checks.push({
       key: 'ai_prompt',
       label: 'AI prompt заполнен',
@@ -2275,7 +2279,7 @@ export const selfCheckTenant = async (
       message: settings?.ai_prompt?.trim() ? 'Инструкция задана' : 'Нет AI инструкции — бот работает по умолчанию',
       action: !settings?.ai_prompt?.trim() ? 'open_ai' : undefined,
     })
-    
+
     const waSource = settings?.whatsapp_source ?? 'chatflow'
     if (waSource === 'chatflow') {
       const hasChatflow = Boolean(settings?.chatflow_token?.trim() && settings?.chatflow_instance_id?.trim())
@@ -2294,7 +2298,7 @@ export const selfCheckTenant = async (
         message: 'Используется AmoCRM Marketplace',
       })
     }
-    
+
     checks.push({
       key: 'amocrm_connected',
       label: 'AmoCRM подключён',
@@ -2302,7 +2306,7 @@ export const selfCheckTenant = async (
       message: amoStatus.connected ? `Домен: ${(amoStatus as AmoStatus).domain ?? '—'}` : 'AmoCRM не подключён',
       action: !amoStatus.connected ? 'reconnect_amo' : undefined,
     })
-    
+
     return {
       tenant_id: tenantId,
       tenant_name: settings?.name ?? undefined,
