@@ -63,8 +63,8 @@ const getErrorMessage = (err: unknown): string => {
 }
 
 /** Create safe default settings to avoid undefined crashes */
-function safeSettings(raw: TenantSettings | null): TenantSettings {
-  return {
+function safeSettings(raw: TenantSettings | null, preserveFrom?: TenantSettings | null): TenantSettings {
+  const base: TenantSettings = {
     id: raw?.id ?? undefined,
     name: raw?.name ?? '',
     ai_enabled: raw?.ai_enabled !== false,
@@ -82,6 +82,28 @@ function safeSettings(raw: TenantSettings | null): TenantSettings {
     amocrm_base_domain: raw?.amocrm_base_domain ?? '',
     amocrm_expires_at: raw?.amocrm_expires_at ?? null,
   }
+  
+  // If we have previous values and server returned empty/masked, preserve the old values
+  if (preserveFrom) {
+    // Token: never overwrite real token with empty or masked
+    if (!base.chatflow_token && preserveFrom.chatflow_token) {
+      base.chatflow_token = preserveFrom.chatflow_token
+    }
+    // Instance ID: preserve if server returned empty
+    if (!base.chatflow_instance_id && preserveFrom.chatflow_instance_id) {
+      base.chatflow_instance_id = preserveFrom.chatflow_instance_id
+    }
+    // Phone: preserve if server returned empty
+    if (!base.chatflow_phone_number && preserveFrom.chatflow_phone_number) {
+      base.chatflow_phone_number = preserveFrom.chatflow_phone_number
+    }
+    // AI prompt: preserve if server returned empty but we had value
+    if (!base.ai_prompt && preserveFrom.ai_prompt) {
+      base.ai_prompt = preserveFrom.ai_prompt
+    }
+  }
+  
+  return base
 }
 
 const AdminTenants = () => {
@@ -234,7 +256,16 @@ const AdminTenants = () => {
         getAmoPipelineMapping(tenantId).catch(() => []),
       ])
 
-      const safe = safeSettings(rawSettings)
+      // Use safeSettings with preservation logic
+      // If preserveLocal=true, pass current settings as preserveFrom
+      const preserveFrom = preserveLocal ? settingsRef.current : null
+      const safe = safeSettings(rawSettings, preserveFrom)
+      
+      console.log('[AdminTenants] Processed settings:', {
+        raw: rawSettings,
+        preserved: preserveFrom,
+        result: safe,
+      })
       
       // Store server WhatsApp values for reference (to detect if token is masked)
       setServerWhatsApp({
@@ -245,30 +276,6 @@ const AdminTenants = () => {
         active: rawSettings.chatflow_active,
         binding_exists: rawSettings.chatflow_binding_exists,
       })
-      
-      // If preserveLocal is true, preserve the user's edited values
-      if (preserveLocal && settingsRef.current) {
-        // For WhatsApp fields - preserve if user edited them (dirty) or if server returned empty but we had values
-        const waFields = ['chatflow_token', 'chatflow_instance_id', 'chatflow_phone_number', 'chatflow_active'] as const
-        waFields.forEach(field => {
-          const currentVal = (settingsRef.current as Record<string, unknown>)?.[field]
-          const serverVal = (safe as Record<string, unknown>)[field]
-          // Preserve if: dirty OR (we had a value and server returned empty/masked)
-          if (dirtyFields.has(field) || (currentVal && !serverVal)) {
-            (safe as Record<string, unknown>)[field] = currentVal
-          }
-        })
-        
-        // For other dirty fields
-        dirtyFields.forEach(field => {
-          if (!waFields.includes(field as typeof waFields[number])) {
-            const key = field as keyof TenantSettings
-            if (key in settingsRef.current!) {
-              (safe as Record<string, unknown>)[key] = (settingsRef.current as Record<string, unknown>)[key]
-            }
-          }
-        })
-      }
       
       setSettings(safe)
       settingsRef.current = safe
@@ -424,6 +431,14 @@ const AdminTenants = () => {
     if (!activeTenant) return
     setActionStatus('loading')
     setActionError(null)
+    
+    // Store current values before save
+    const currentValues = {
+      ai_enabled: settings.ai_enabled,
+      ai_prompt: settings.ai_prompt,
+      ai_after_submit_behavior: settings.ai_after_submit_behavior,
+    }
+    
     try {
       const updatedSettings = await updateTenantSettings(activeTenant.id, {
         ai_enabled: settings.ai_enabled,
@@ -431,18 +446,32 @@ const AdminTenants = () => {
         ai_after_submit_behavior: settings.ai_after_submit_behavior,
       })
       
-      // If backend returned updated settings, use them; otherwise refetch
+      // Update settingsRef with current values before any refetch
+      settingsRef.current = { ...settings, ...currentValues }
+      
+      // If backend returned updated settings, merge them preserving our values
       if (updatedSettings) {
-        setSettings(safeSettings(updatedSettings))
+        setSettings(safeSettings(updatedSettings, settingsRef.current))
       } else {
-        await loadSettings(activeTenant.id)
+        // Refetch but preserve local values
+        await loadSettings(activeTenant.id, true)
       }
+      
+      // Clear dirty fields for AI
+      setDirtyFields(prev => {
+        const next = new Set(prev)
+        next.delete('ai_prompt')
+        next.delete('ai_enabled')
+        next.delete('ai_after_submit_behavior')
+        return next
+      })
+      
       await loadTenants()
       showToast('Сохранено ✅')
     } catch (err) {
-      const msg = getErrorMessage(err)
-      // Добавляем более понятные сообщения для известных ошибок
-      setActionError(msg)
+      // On error, ensure we don't lose values
+      setSettings(prev => ({ ...prev, ...currentValues }))
+      setActionError(getErrorMessage(err))
     } finally {
       setActionStatus('idle')
     }

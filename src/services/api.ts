@@ -1758,10 +1758,79 @@ export type TenantSettings = {
   chatflow_phone_number?: string | null
   chatflow_active?: boolean
   chatflow_binding_exists?: boolean
+  chatflow_health_ok?: boolean
   amocrm_connected?: boolean
   amocrm_domain?: string | null
   amocrm_base_domain?: string | null
   amocrm_expires_at?: string | null
+}
+
+/** Normalize backend response to flat TenantSettings structure */
+function normalizeTenantSettings(raw: unknown, tenantId?: string | number): TenantSettings {
+  if (!raw || typeof raw !== 'object') {
+    return { id: tenantId }
+  }
+  
+  const r = raw as Record<string, unknown>
+  
+  // Backend may return nested structure: { settings: {...}, whatsapp: {...}, amocrm: {...} }
+  // OR flat structure directly
+  const settings = (r.settings && typeof r.settings === 'object' ? r.settings : r) as Record<string, unknown>
+  const whatsapp = (r.whatsapp && typeof r.whatsapp === 'object' ? r.whatsapp : r) as Record<string, unknown>
+  const amocrm = (r.amocrm && typeof r.amocrm === 'object' ? r.amocrm : r) as Record<string, unknown>
+  
+  // Extract values with priority: nested object > flat > null
+  const ai_prompt = settings.ai_prompt ?? r.ai_prompt ?? null
+  const ai_enabled = settings.ai_enabled_global ?? settings.ai_enabled ?? r.ai_enabled ?? r.ai_enabled_global
+  const ai_behavior = settings.ai_after_lead_submitted_behavior ?? settings.ai_after_submit_behavior ?? r.ai_after_submit_behavior ?? 'polite_close'
+  
+  // WhatsApp fields - check both nested and flat
+  const wa_source = (settings.whatsapp_source ?? whatsapp.whatsapp_source ?? r.whatsapp_source ?? 'chatflow') as TenantSettings['whatsapp_source']
+  const cf_token = (whatsapp.chatflow_token ?? whatsapp.token ?? r.chatflow_token ?? null) as string | null
+  const cf_token_masked = (whatsapp.chatflow_token_masked ?? whatsapp.token_masked ?? r.chatflow_token_masked ?? null) as string | null
+  const cf_instance = (whatsapp.chatflow_instance_id ?? whatsapp.instance_id ?? r.chatflow_instance_id ?? null) as string | null
+  const cf_phone = (whatsapp.chatflow_phone_number ?? whatsapp.phone_number ?? r.chatflow_phone_number ?? null) as string | null
+  const cf_active = whatsapp.chatflow_active ?? whatsapp.active ?? whatsapp.is_active ?? r.chatflow_active
+  const cf_binding = whatsapp.binding_exists ?? whatsapp.chatflow_binding_exists ?? r.chatflow_binding_exists
+  const cf_health = whatsapp.health_ok ?? whatsapp.chatflow_health_ok ?? r.chatflow_health_ok
+  
+  // AmoCRM fields
+  const amo_connected = amocrm.connected ?? r.amocrm_connected ?? false
+  const amo_domain = (amocrm.domain ?? amocrm.base_domain ?? r.amocrm_domain ?? null) as string | null
+  const amo_base = (amocrm.base_domain ?? settings.amocrm_base_domain ?? r.amocrm_base_domain ?? null) as string | null
+  const amo_expires = (amocrm.expires_at ?? r.amocrm_expires_at ?? null) as string | null
+  
+  // Compute binding_exists if not provided
+  const hasToken = Boolean(cf_token?.trim() || cf_token_masked?.trim())
+  const hasInstance = Boolean(cf_instance?.trim())
+  
+  // Get id with proper type checking
+  const extractId = (): string | number | undefined => {
+    if (typeof r.tenant_id === 'string' || typeof r.tenant_id === 'number') return r.tenant_id
+    if (typeof r.id === 'string' || typeof r.id === 'number') return r.id
+    if (typeof settings.id === 'string' || typeof settings.id === 'number') return settings.id
+    return tenantId
+  }
+  
+  return {
+    id: extractId(),
+    name: (r.tenant_name ?? r.name ?? settings.name ?? '') as string,
+    ai_enabled: ai_enabled !== false,
+    ai_prompt: ai_prompt as string | null,
+    ai_after_submit_behavior: ai_behavior as string,
+    whatsapp_source: wa_source,
+    chatflow_token: cf_token,
+    chatflow_token_masked: cf_token_masked,
+    chatflow_instance_id: cf_instance,
+    chatflow_phone_number: cf_phone,
+    chatflow_active: cf_active !== false,
+    chatflow_binding_exists: cf_binding === true ? true : (hasToken && hasInstance),
+    chatflow_health_ok: cf_health === true,
+    amocrm_connected: amo_connected === true,
+    amocrm_domain: amo_domain,
+    amocrm_base_domain: amo_base,
+    amocrm_expires_at: amo_expires,
+  }
 }
 
 export const getTenantSettings = async (
@@ -1827,12 +1896,11 @@ export const getTenantSettings = async (
     throw detailedErr
   }
 
-  const data = await response.json() as TenantSettings
-  // Ensure binding_exists is computed if not provided
-  if (data.chatflow_binding_exists === undefined) {
-    data.chatflow_binding_exists = Boolean(data.chatflow_token?.trim() && data.chatflow_instance_id?.trim())
-  }
-  return data
+  const rawData = await response.json()
+  console.log('[API] getTenantSettings raw response:', rawData)
+  
+  // Normalize the response structure
+  return normalizeTenantSettings(rawData, tenantId)
 }
 
 export const updateTenantSettings = async (
