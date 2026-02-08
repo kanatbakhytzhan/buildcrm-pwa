@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bot, MessageCircle, MapPin, FileText, MessageSquare, Phone } from 'lucide-react'
+import { ArrowLeft, MessageCircle, MapPin, FileText, MessageSquare, Phone } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../context/LeadsContext'
 import { sanitizePhoneForTel, sanitizePhoneForWa } from '../utils/phone'
@@ -17,7 +17,7 @@ import {
   postLeadComment,
   type LeadComment,
 } from '../services/api'
-import { formatBadge AlmatyFix } from '../utils/dateFormat'
+import { formatBadgeAlmatyFix } from '../utils/dateFormat'
 import type { NormalizedLead } from '../utils/normalizeLead'
 import { AiModeToggle } from '../components/AiModeToggle'
 import { LeadScore } from '../components/LeadScore'

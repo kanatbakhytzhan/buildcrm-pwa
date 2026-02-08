@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import './LeadScore.css'
-import { LeadScore as LeadScoreType, getScoreEmoji, getScoreLabel } from '../types/leadScore'
+import type { LeadScore as LeadScoreType } from '../types/leadScore'
+import { getScoreEmoji, getScoreLabel } from '../types/leadScore'
 
 interface LeadScoreProps {
     score: LeadScoreType

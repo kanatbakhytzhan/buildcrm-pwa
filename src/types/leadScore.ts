@@ -22,7 +22,7 @@ export function getScoreEmoji(level: LeadScoreLevel): string {
     }
 }
 
-export function getScoreLabel(level: LeadScore Level): string {
+export function getScoreLabel(level: LeadScoreLevel): string {
     switch (level) {
         case 'hot': return 'Горячий'
         case 'warm': return 'Теплый'
