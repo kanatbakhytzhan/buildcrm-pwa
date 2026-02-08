@@ -1,0 +1,125 @@
+/* Select Component Styles */
+.ui-select {
+    position: relative;
+    width: 100%;
+}
+
+.ui-select__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.ui-select__trigger:hover {
+    border-color: var(--primary);
+}
+
+.ui-select__trigger:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.ui-select__trigger--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.ui-select__placeholder {
+    color: var(--text-muted);
+}
+
+.ui-select__icon {
+    display: flex;
+    align-items: center;
+    color: var(--text-secondary);
+    transition: transform var(--transition-fast);
+}
+
+.ui-select__icon--open {
+    transform: rotate(180deg);
+}
+
+.ui-select__dropdown {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    max-height: 320px;
+    overflow-y: auto;
+    z-index: var(--z-dropdown);
+}
+
+.ui-select__search {
+    position: sticky;
+    top: 0;
+    padding: var(--space-2);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.ui-select__search input {
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+}
+
+.ui-select__option {
+    padding: var(--space-3) var(--space-4);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.ui-select__option:hover {
+    background: var(--bg-primary);
+}
+
+.ui-select__option--selected {
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: var(--font-weight-medium);
+}
+
+.ui-select__option--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ui-select__empty {
+    padding: var(--space-6);
+    text-align: center;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}
+
+/* Size variants */
+.ui-select--sm .ui-select__trigger {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+}
+
+.ui-select--lg .ui-select__trigger {
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--font-size-lg);
+}
+
+/* Full width */
+.ui-select--full {
+    width: 100%;
+}
