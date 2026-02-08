@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
-import { LeadCategory, LEAD_CATEGORIES } from '../../types/leadCategory'
+import { LEAD_CATEGORIES } from '../../types/leadCategory'
+import type { LeadCategory } from '../../types/leadCategory'
 import { CATEGORY_CONFIG } from '../../utils/categoryColorMap'
 import LeadCategoryBadge from './LeadCategoryBadge'
 import './LeadCategorySelect.css'

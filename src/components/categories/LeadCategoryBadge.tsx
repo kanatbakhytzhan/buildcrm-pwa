@@ -1,6 +1,6 @@
 import React from 'react'
-import { getCategoryConfig } from '../utils/categoryColorMap'
-import { LeadCategory } from '../types/leadCategory'
+import { getCategoryConfig } from '../../utils/categoryColorMap'
+import type { LeadCategory } from '../../types/leadCategory'
 import './LeadCategoryBadge.css'
 
 interface LeadCategoryBadgeProps {

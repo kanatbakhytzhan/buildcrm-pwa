@@ -1,4 +1,4 @@
-import { LeadCategory, LeadCategoryConfig } from '../types/leadCategory'
+import type { LeadCategory, LeadCategoryConfig } from '../types/leadCategory'
 
 export const CATEGORY_CONFIG: Record<LeadCategory, LeadCategoryConfig> = {
     new: {

@@ -1,6 +1,7 @@
 import React from 'react'
 import { X, Check } from 'lucide-react'
-import { LeadCategory, LEAD_CATEGORIES } from '../../types/leadCategory'
+import { LEAD_CATEGORIES } from '../../types/leadCategory'
+import type { LeadCategory } from '../../types/leadCategory'
 import { CATEGORY_CONFIG } from '../../utils/categoryColorMap'
 import './LeadCategoryBottomSheet.css'
 

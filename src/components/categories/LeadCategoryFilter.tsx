@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react'
-import { CATEGORY_CONFIG, getCategoryColor } from '../../utils/categoryColorMap'
-import { LeadCategory, LEAD_CATEGORIES } from '../../types/leadCategory'
+import { CATEGORY_CONFIG } from '../../utils/categoryColorMap'
+import { LEAD_CATEGORIES } from '../../types/leadCategory'
+import type { LeadCategory } from '../../types/leadCategory'
 import './LeadCategoryFilter.css'
 
 interface LeadCategoryFilterProps {
