@@ -1,0 +1,128 @@
+.ui-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    font-family: var(--font-family);
+    font-weight: var(--font-weight-semibold);
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    white-space: nowrap;
+    user-select: none;
+    outline: none;
+}
+
+.ui-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ui-button:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+/* Variants */
+.ui-button--primary {
+    background: var(--primary);
+    color: var(--color-white);
+    box-shadow: var(--shadow-sm);
+}
+
+.ui-button--primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.ui-button--secondary {
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+}
+
+.ui-button--secondary:hover:not(:disabled) {
+    background: var(--color-gray-50);
+}
+
+.ui-button--ghost {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.ui-button--ghost:hover:not(:disabled) {
+    background: var(--color-gray-50);
+    border-color: var(--border-strong);
+}
+
+.ui-button--danger {
+    background: var(--danger);
+    color: var(--color-white);
+}
+
+.ui-button--danger:hover:not(:disabled) {
+    background: var(--color-danger-600);
+}
+
+/* Sizes */
+.ui-button--sm {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+    min-height: 32px;
+}
+
+.ui-button--md {
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-size-base);
+    min-height: 40px;
+}
+
+.ui-button--lg {
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--font-size-lg);
+    min-height: 48px;
+}
+
+/* Modifiers */
+.ui-button--full {
+    width: 100%;
+}
+
+.ui-button--loading {
+    position: relative;
+    color: transparent;
+}
+
+.ui-button__spinner {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: currentColor;
+}
+
+.ui-button--primary .ui-button__spinner,
+.ui-button--danger .ui-button__spinner {
+    color: var(--color-white);
+}
+
+.ui-button--secondary .ui-button__spinner,
+.ui-button--ghost .ui-button__spinner {
+    color: var(--text-primary);
+}
+
+.ui-button__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+}
+
+.ui-button__text {
+    line-height: 1;
+}

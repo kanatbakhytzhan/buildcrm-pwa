@@ -22,8 +22,14 @@ import type { NormalizedLead } from '../utils/normalizeLead'
 const AI_MUTE_NO_TENANT_MESSAGE =
   'У этого лида не указан клиент (tenant). Сначала привяжите лид к клиенту или выполните исправление в админ-диагностике.'
 
-const LeadDetails = () => {
-  const { id = '' } = useParams()
+interface LeadDetailsProps {
+  embedded?: boolean
+  leadId?: string
+}
+
+const LeadDetails = ({ embedded = false, leadId: propLeadId }: LeadDetailsProps = {}) => {
+  const { id: urlId = '' } = useParams()
+  const id = propLeadId || urlId
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
   const { getLeadById, updateLeadStatus, deleteLead, showToast, updateLeadInState } = useLeads()
@@ -154,7 +160,7 @@ const LeadDetails = () => {
         setAiMutedInChat(res.ai_muted_in_chat === true)
         setAiEnabledGlobal(res.ai_enabled_global !== false)
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setAiChatStatusLoading(false))
   }
 
@@ -164,11 +170,11 @@ const LeadDetails = () => {
   const phoneMissing = !phoneTel || !phoneWa
   const initials = lead?.name
     ? lead.name
-        .split(' ')
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0]?.toUpperCase())
-        .join('')
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('')
     : 'Л'
 
   const handleCall = () => {
@@ -286,25 +292,27 @@ const LeadDetails = () => {
 
   return (
     <div className="page-stack">
-      <div className="lead-details-header">
-        <button className="back-button" type="button" onClick={handleBack} aria-label="Назад">
-          <ArrowLeft size={20} />
-        </button>
-        <h1 className="lead-details-title">Заявка #{lead?.id || '—'}</h1>
-        {lead ? (
-          <ThreeDotsMenu
-            items={[
-              {
-                label: 'Удалить лид',
-                onClick: () => setConfirmOpen(true),
-                tone: 'danger',
-              },
-            ]}
-          />
-        ) : (
-          <span className="lead-details-spacer" />
-        )}
-      </div>
+      {!embedded && (
+        <div className="lead-details-header">
+          <button className="back-button" type="button" onClick={handleBack} aria-label="Назад">
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className="lead-details-title">Заявка #{lead?.id || '—'}</h1>
+          {lead ? (
+            <ThreeDotsMenu
+              items={[
+                {
+                  label: 'Удалить лид',
+                  onClick: () => setConfirmOpen(true),
+                  tone: 'danger',
+                },
+              ]}
+            />
+          ) : (
+            <span className="lead-details-spacer" />
+          )}
+        </div>
+      )}
       {lead ? (
         <>
           <div className="card lead-profile-card">

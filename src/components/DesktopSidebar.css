@@ -1,0 +1,110 @@
+.desktop-sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background: var(--surface);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-6);
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    overflow-y: auto;
+}
+
+.desktop-sidebar__header {
+    margin-bottom: var(--space-8);
+}
+
+.desktop-sidebar__title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    margin: 0 0 var(--space-1);
+    letter-spacing: -0.02em;
+}
+
+.desktop-sidebar__subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+}
+
+.desktop-sidebar__nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    flex: 1;
+}
+
+.desktop-sidebar__link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    color: var(--text-secondary);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    text-decoration: none;
+    transition: all var(--transition-base);
+}
+
+.desktop-sidebar__link:hover {
+    background: var(--color-gray-50);
+    color: var(--text-primary);
+}
+
+.desktop-sidebar__link--active {
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: var(--font-weight-semibold);
+}
+
+.desktop-sidebar__footer {
+    margin-top: auto;
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.desktop-sidebar__user {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.desktop-sidebar__user-role {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-medium);
+}
+
+.desktop-sidebar__logout {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.desktop-sidebar__logout:hover {
+    background: var(--color-gray-50);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+/* Hide on mobile */
+@media (max-width: 1024px) {
+    .desktop-sidebar {
+        display: none;
+    }
+}

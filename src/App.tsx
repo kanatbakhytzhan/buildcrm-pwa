@@ -3,8 +3,10 @@ import { Outlet } from 'react-router-dom'
 import BottomTabs from './components/BottomTabs'
 import OfflineBanner from './components/OfflineBanner'
 import Toast from './components/Toast'
+import { DesktopSidebar } from './components/DesktopSidebar'
 import { useAuth } from './context/AuthContext'
 import { useLeads } from './context/LeadsContext'
+import { useBreakpoint } from './hooks/useBreakpoint'
 import HotLeads from './pages/HotLeads'
 import LeadDetails from './pages/LeadDetails'
 import Leads from './pages/Leads'
@@ -26,14 +28,19 @@ import { CRM_V2_ENABLED } from './config/appConfig'
 
 const AppLayout = () => {
   const { toastMessage, clearToast } = useLeads()
+  const { isDesktop } = useBreakpoint()
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={{ flexDirection: isDesktop ? 'row' : 'column' }}>
       <OfflineBanner />
-      <main className="app-content">
+      {isDesktop && <DesktopSidebar />}
+      <main className="app-content" style={{
+        paddingBottom: isDesktop ? 'var(--space-6)' : 'calc(100px + env(safe-area-inset-bottom, 0))'
+      }}>
         <Outlet />
       </main>
       {toastMessage && <Toast message={toastMessage} onClose={clearToast} />}
-      <BottomTabs />
+      {!isDesktop && <BottomTabs />}
     </div>
   )
 }

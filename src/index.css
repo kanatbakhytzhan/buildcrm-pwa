@@ -1,35 +1,32 @@
+@import './theme/tokens.css';
+
 :root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.4;
-  font-weight: 400;
-  color: #0f172a;
-  background-color: #f6f7fb;
+  font-family: var(--font-family);
+  line-height: var(--line-height-normal);
+  font-weight: var(--font-weight-normal);
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Design system tokens */
-  --bg: #f6f7fb;
-  --card: #ffffff;
-  --text: #0f172a;
-  --muted: #64748b;
-  --border: rgba(15, 23, 42, 0.08);
-  --shadow-sm: 0 2px 12px rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
-  --radius-card: 20px;
-  --radius-btn: 16px;
-  --radius-pill: 999px;
-  --r-lg: 18px;
-  --r-xl: 24px;
-  --primary: #1d4ed8;
-  --success: #22c55e;
-  --danger: #ef4444;
-  --chip: #eef2ff;
-  --chipText: #1d4ed8;
-  /* Typography */
-  --text-page-title: 28px;
-  --text-card-title: 18px;
-  --text-secondary: 14px;
+
+  /* Legacy tokens for backward compatibility */
+  --bg: var(--bg-primary);
+  --card: var(--surface);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --border: var(--border-color);
+  --radius-card: var(--radius-xl);
+  --radius-btn: var(--radius-lg);
+  --radius-pill: var(--radius-full);
+  --r-lg: var(--radius-lg);
+  --r-xl: var(--radius-xl);
+  --chip: var(--primary-light);
+  --chipText: var(--primary);
+  --text-page-title: var(--font-size-3xl);
+  --text-card-title: var(--font-size-lg);
+  --text-secondary: var(--font-size-sm);
 }
 
 * {
@@ -59,14 +56,21 @@ a {
   width: 100%;
 }
 
+/* Responsive app shell - no more narrow column on desktop */
 .app-shell {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   background-color: var(--bg);
-  /* Mobile Emulation on Desktop */
-  max-width: 420px;
-  margin: 0 auto;
+  width: 100%;
+}
+
+/* Mobile: narrow centered layout */
+@media (max-width: 640px) {
+  .app-shell {
+    max-width: 420px;
+    margin: 0 auto;
+  }
 }
 
 /* Single safe-area: space for floating bottom bar so content doesn't go under it */

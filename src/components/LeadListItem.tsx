@@ -13,9 +13,10 @@ type LeadListItemProps = {
   lead: NormalizedLead
   onClick: () => void
   pendingSync?: boolean
+  isActive?: boolean
 }
 
-const LeadListItem = ({ lead, onClick, pendingSync }: LeadListItemProps) => {
+const LeadListItem = ({ lead, onClick, pendingSync, isActive = false }: LeadListItemProps) => {
   const { updateLeadStatus } = useLeads()
   const [menuOpen, setMenuOpen] = useState(false)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -103,7 +104,7 @@ const LeadListItem = ({ lead, onClick, pendingSync }: LeadListItemProps) => {
     <>
       <button
         type="button"
-        className={`lead-item lead-item--${lead.status}`}
+        className={`lead-item lead-item--${lead.status} ${isActive ? 'lead-item--active' : ''}`}
         onClick={handleClick}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
