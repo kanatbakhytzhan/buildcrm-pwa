@@ -2144,21 +2144,19 @@ export const saveAmoPipelineMapping = async (
   mapping: AmoPipelineMapping[],
   pipelineId?: string | number,
 ): Promise<void> => {
-  // Convert array [{stage_key, stage_id}] to dictionary {stage_key: stage_id}
-  const mappingDict: Record<string, number> = {}
-  mapping.forEach(m => {
-    if (m.stage_id) {
-      mappingDict[m.stage_key] = Number(m.stage_id)
-    }
-  })
+  // Backend expects: { mappings: [{stage_key, stage_id, pipeline_id, is_active}] }
+  // Convert frontend format to backend format
+  const mappings = mapping.map(m => ({
+    stage_key: m.stage_key,
+    stage_id: m.stage_id ? Number(m.stage_id) : null,  // null if empty, not undefined
+    pipeline_id: pipelineId ? Number(pipelineId) : null,  // Include pipeline_id in each mapping
+    is_active: true  // Default to active
+  }))
 
   await request<unknown>(`/api/admin/tenants/${tenantId}/amocrm/pipeline-mapping`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({
-      mapping: mappingDict,
-      primary_pipeline_id: pipelineId
-    }),
+    body: JSON.stringify({ mappings }),  // Send as { mappings: [...] }
   })
 }
 

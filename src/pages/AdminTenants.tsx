@@ -410,19 +410,63 @@ const AdminTenants = () => {
 
   const handleSaveAmoMapping = async () => {
     if (!activeTenant) return
+
+    // Validation: check if at least one stage is mapped
+    const hasMappings = amoMapping.some(m => m.stage_id)
+    if (!hasMappings) {
+      setActionError('Укажите хотя бы одно соответствие стадий перед сохранением')
+      return
+    }
+
     setActionStatus('loading')
     setActionError(null)
 
     try {
-      // Pass selectedPipelineId to link mapping to the correct pipeline
+      // Save mapping
       await saveAmoPipelineMapping(activeTenant.id, amoMapping, selectedPipelineId)
 
-      showToast('Маппинг сохранён успешно ✅')
+      // Refetch to confirm the changes persisted
+      const refreshedMapping = await getAmoPipelineMapping(activeTenant.id)
 
-      // Refetch to confirm
+      // Verify at least some mappings were saved
+      const savedCount = refreshedMapping.filter(m => m.stage_id).length
+      const sentCount = amoMapping.filter(m => m.stage_id).length
+
+      if (savedCount === 0 && sentCount > 0) {
+        throw new Error('Маппинг не сохранился. Попробуйте ещё раз.')
+      }
+
+      // Update local state with confirmed data
+      setAmoMapping(refreshedMapping.length > 0 ? refreshedMapping : amoMapping)
+
+      showToast(`Маппинг сохранён успешно ✅ (${savedCount} стадий)`)
+
+      // Full refetch to update all settings
       await loadSettings(activeTenant.id)
     } catch (err) {
-      setActionError(getErrorMessage(err))
+      // Enhanced error handling for backend validation errors
+      const parsed = parseApiError(err)
+      let errorMsg = parsed.detail
+
+      // If error contains validation details array, format it nicely
+      if (err && typeof err === 'object' && 'response' in err) {
+        try {
+          const response = err as { response?: { data?: { detail?: unknown } } }
+          const detail = response.response?.data?.detail
+
+          if (Array.isArray(detail)) {
+            errorMsg = detail.map((d: { msg?: string; loc?: string[] }) =>
+              `${d.loc?.join('.') || 'Поле'}: ${d.msg || 'ошибка валидации'}`
+            ).join('; ')
+          } else if (typeof detail === 'string') {
+            errorMsg = detail
+          }
+        } catch {
+          // Fallback to default error message
+        }
+      }
+
+      setActionError(errorMsg)
     } finally {
       setActionStatus('idle')
     }
