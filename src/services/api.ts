@@ -527,6 +527,98 @@ export const updateLeadCategory = async (id: string, category: string) => {
   return data ?? { id, category }
 }
 
+/* --- Stage Management API --- */
+
+/** GET /api/tenants/me/stages - Load tenant stages */
+export const getTenantStages = async (): Promise<{ stages: import('../types/stage').TenantStage[] }> => {
+  try {
+    const data = await request<{ stages: import('../types/stage').TenantStage[] }>('/api/tenants/me/stages', {
+      method: 'GET',
+      headers: { ...authHeaders() },
+    })
+    return data || { stages: [] }
+  } catch (err) {
+    // If endpoint doesn't exist (404), return empty to use fallback
+    if (err instanceof Error && err.message.includes('404')) {
+      return { stages: [] }
+    }
+    throw err
+  }
+}
+
+/** POST /api/stages - Create new stage */
+export const createStage = async (payload: {
+  stage_key: string
+  title_ru: string
+  title_kz?: string
+  color: string
+  order_index: number
+}): Promise<import('../types/stage').TenantStage> => {
+  const data = await request<import('../types/stage').TenantStage>('/api/stages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+  return data!
+}
+
+/** PUT /api/stages/{id} - Update stage */
+export const updateStage = async (
+  id: number,
+  payload: {
+    title_ru?: string
+    title_kz?: string
+    color?: string
+    is_active?: boolean
+  },
+): Promise<import('../types/stage').TenantStage> => {
+  const data = await request<import('../types/stage').TenantStage>(`/api/stages/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+  return data!
+}
+
+/** PUT /api/stages/reorder - Reorder stages */
+export const reorderStages = async (stageIds: number[]): Promise<void> => {
+  await request<void>('/api/stages/reorder', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ stage_ids: stageIds }),
+  })
+}
+
+/** DELETE /api/stages/{id} - Archive/soft delete stage */
+export const archiveStage = async (id: number): Promise<void> => {
+  await request<void>(`/api/stages/${id}`, {
+    method: 'DELETE',
+    headers: { ...authHeaders() },
+  })
+}
+
+/** PATCH /api/leads/{id}/stage - Update lead stage_key */
+export const updateLeadStage = async (id: string, stage_key: string) => {
+  const data = await request<unknown>(`/api/leads/${id}/stage`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ stage_key }),
+  })
+  return data ?? { id, stage_key }
+}
+
 /** PATCH /api/leads/{id} — status, next_call_at, etc. */
 export const updateLeadFields = async (
   id: string,

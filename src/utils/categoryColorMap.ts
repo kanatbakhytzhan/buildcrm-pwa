@@ -58,6 +58,22 @@ export const CATEGORY_CONFIG: Record<LeadCategory, LeadCategoryConfig> = {
         borderColor: '#f3f4f6', // gray-100
         order: 7,
     },
+    non_target: {
+        id: 'non_target',
+        label: 'Нецелевой',
+        color: '#888888',
+        bgColor: '#f5f5f5',
+        borderColor: '#dddddd',
+        order: 70,
+    },
+    postponed: {
+        id: 'postponed',
+        label: 'Отложен',
+        color: '#6b7280',
+        bgColor: '#f3f4f6',
+        borderColor: '#d1d5db',
+        order: 80,
+    },
     won: {
         id: 'won',
         label: 'УСПЕШНО',

@@ -8,7 +8,6 @@ import {
 } from '@dnd-kit/core'
 import type { Stage } from '../../types/stage'
 import type { NormalizedLead } from '../../utils/normalizeLead'
-import { categoryToStageKey } from '../../types/stage'
 import { groupLeadsByStage } from '../../utils/leadSorting'
 import { KanbanColumn } from './KanbanColumn'
 import { LeadCard } from './LeadCard'
@@ -33,7 +32,7 @@ export function KanbanBoard({
 
     // Group leads by stage
     const leadsByStage = useMemo(
-        () => groupLeadsByStage(leads, categoryToStageKey),
+        () => groupLeadsByStage(leads),
         [leads]
     )
 

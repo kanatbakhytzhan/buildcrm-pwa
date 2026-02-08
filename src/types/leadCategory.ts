@@ -7,6 +7,8 @@ export type LeadCategory =
     | 'measurement_assigned'  // ЗАМЕР НАЗНАЧЕН
     | 'measurement_done'      // ЗАМЕР ПРОВЕДЕН
     | 'rejected'              // ОТКАЗ/НЕЦЕЛЕВОЙ
+    | 'non_target'            // НЕЦЕЛЕВОЙ
+    | 'postponed'             // ОТЛОЖЕН
     | 'won'                   // УСПЕШНО
 
 export interface LeadCategoryConfig {
@@ -27,5 +29,7 @@ export const LEAD_CATEGORIES: LeadCategory[] = [
     'measurement_assigned',
     'measurement_done',
     'rejected',
+    'non_target',
+    'postponed',
     'won',
 ]

@@ -1,4 +1,5 @@
 import type { NormalizedLead } from '../utils/normalizeLead'
+import { categoryToStageKey } from '../types/stage'
 
 /**
  * Priority sorting for leads within a kanban column
@@ -52,15 +53,17 @@ export function sortLeadsByPriority(leads: NormalizedLead[]): NormalizedLead[] {
 
 /**
  * Group leads by stage key
+ * Uses lead.stage_key if available, otherwise maps from category
  */
 export function groupLeadsByStage(
     leads: NormalizedLead[],
-    categoryToStageKey: (category: string) => string
 ): Record<string, NormalizedLead[]> {
     const grouped: Record<string, NormalizedLead[]> = {}
 
     leads.forEach(lead => {
-        const stageKey = categoryToStageKey(lead.category)
+        // Use stage_key if available, else fall back to category mapping
+        const stageKey = lead.stage_key || categoryToStageKey(lead.category)
+
         if (!grouped[stageKey]) {
             grouped[stageKey] = []
         }

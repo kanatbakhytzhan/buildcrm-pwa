@@ -152,9 +152,8 @@ export const LeadsProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await getLeads()
       const items = response.leads
-      const normalized = items.map((lead) =>
-        normalizeLead(lead as Record<string, unknown>),
-      )
+      const raw = items
+      const normalized = raw.map(lead => normalizeLead(lead as Record<string, unknown>))
       const withOutbox = await applyOutboxToLeads(normalized)
       setLeads(withOutbox)
       leadsRef.current = withOutbox

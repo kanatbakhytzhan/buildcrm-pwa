@@ -1,3 +1,6 @@
+import type { LeadCategory } from '../types/leadCategory'
+import { categoryToStageKey } from '../types/stage'
+
 export type NormalizedLead = {
   id: string
   name: string
@@ -6,7 +9,8 @@ export type NormalizedLead = {
   request: string
   createdAt: string
   status: 'new' | 'success' | 'failed'
-  category: import('../types/leadCategory').LeadCategory
+  category: import('../types/leadCategory').LeadCategory  // Legacy field
+  stage_key?: string  // New field - dynamic stage key
   comments_count?: number
   last_comment?: string
   score?: number  // AI score 0-100
@@ -115,14 +119,31 @@ export const normalizeLead = (raw: Record<string, unknown>): NormalizedLead => {
       .replace(' ', 'T')
   const status = normalizeLeadStatus(raw.status ?? 'new')
 
-  // Normalize category
-  let category = String(raw.category ?? 'no_reply').toLowerCase()
-  const validCategories = [
-    'no_reply', 'wants_call', 'partial_data', 'full_data',
-    'measurement_assigned', 'measurement_done', 'rejected', 'won'
+  // Normalize  // Category (legacy field for backward compat)
+  const rawCategory = raw.category ?? raw.lead_category
+  const validCategories: LeadCategory[] = [
+    'no_reply',
+    'wants_call',
+    'partial_data',
+    'full_data',
+    'rejected',
+    'non_target',
+    'postponed',
+    'won',
   ]
-  if (!validCategories.includes(category)) {
-    category = 'no_reply'  // Default to "НЕ ОТВЕТИЛИ"
+  let category: LeadCategory = 'no_reply'
+  if (typeof rawCategory === 'string' && validCategories.includes(rawCategory as LeadCategory)) {
+    category = rawCategory as LeadCategory
+  }
+
+  // Stage key (new field - dynamic)
+  // Priority: raw.stage_key > categoryToStageKey(raw.category)
+  let stage_key: string | undefined
+  if (typeof raw.stage_key === 'string' && raw.stage_key.trim()) {
+    stage_key = raw.stage_key.trim()
+  } else if (rawCategory) {
+    // Migration: map old category to stage_key
+    stage_key = categoryToStageKey(rawCategory as string)
   }
 
   const comments_count =
@@ -150,6 +171,7 @@ export const normalizeLead = (raw: Record<string, unknown>): NormalizedLead => {
     createdAt,
     status,
     category: category as import('../types/leadCategory').LeadCategory,
+    stage_key,  // New field
     ...(comments_count !== undefined && !Number.isNaN(comments_count)
       ? { comments_count }
       : {}),
