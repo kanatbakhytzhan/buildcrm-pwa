@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Phone, MessageCircle, CheckCircle, XCircle } from 'lucide-react'
+import { Phone, MessageCircle, Tag } from 'lucide-react'
 import type { NormalizedLead } from '../utils/normalizeLead'
 
 type LeadActionSheetProps = {
@@ -8,8 +8,7 @@ type LeadActionSheetProps = {
   onClose: () => void
   onCall: () => void
   onWhatsApp: () => void
-  onSuccess: () => void
-  onFailed: () => void
+  onChangeCategory: () => void
   phoneAvailable: boolean
 }
 
@@ -18,8 +17,7 @@ const LeadActionSheet = ({
   onClose,
   onCall,
   onWhatsApp,
-  onSuccess,
-  onFailed,
+  onChangeCategory,
   phoneAvailable,
 }: LeadActionSheetProps) => {
   useEffect(() => {
@@ -81,25 +79,14 @@ const LeadActionSheet = ({
           )}
           <button
             type="button"
-            className="action-sheet-item action-sheet-item--success"
+            className="action-sheet-item"
             onClick={() => {
-              onSuccess()
+              onChangeCategory()
               onClose()
             }}
           >
-            <CheckCircle size={20} />
-            <span>Взять в работу</span>
-          </button>
-          <button
-            type="button"
-            className="action-sheet-item action-sheet-item--danger"
-            onClick={() => {
-              onFailed()
-              onClose()
-            }}
-          >
-            <XCircle size={20} />
-            <span>Отказать</span>
+            <Tag size={20} />
+            <span>Сменить категорию</span>
           </button>
         </div>
         <button

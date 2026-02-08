@@ -33,8 +33,8 @@ const resolveStatusFromResponse = (
     const dataStatus = (record.data as Record<string, unknown> | undefined)?.status
     const nestedLeadStatus = (
       (record.data as Record<string, unknown> | undefined)?.lead as
-        | Record<string, unknown>
-        | undefined
+      | Record<string, unknown>
+      | undefined
     )?.status
     return normalizeLeadStatus(
       direct ?? leadStatus ?? dataStatus ?? nestedLeadStatus ?? fallback,
@@ -280,12 +280,34 @@ export const LeadsProvider = ({ children }: { children: ReactNode }) => {
         const resolvedStatus = resolveStatusFromResponse(response, status)
         await updateLeadStatusLocal(id, resolvedStatus)
         setPendingLeadIds((prev) => prev.filter((leadId) => leadId !== id))
-        showToast('Статус обновлён')
       } catch {
         await queueUpdate()
       }
     },
     [showToast, updateLeadStatusLocal],
+  )
+
+  const updateLeadCategory = useCallback(
+    async (id: string, category: import('../types/leadCategory').LeadCategory) => {
+      // Optimistic update
+      const prevLeads = leadsRef.current
+      const prevLead = prevLeads.find((l) => l.id === id)
+
+      if (!prevLead) return
+
+      await updateLeadInState(id, { category })
+
+      try {
+        await import('../services/api').then(m => m.updateLeadCategory(id, category))
+        showToast('Категория обновлена')
+      } catch (e) {
+        // Rollback
+        await updateLeadInState(id, { category: prevLead.category })
+        showToast('Не удалось обновить категорию')
+        console.error(e)
+      }
+    },
+    [updateLeadInState, showToast],
   )
 
   const deleteLead = useCallback(
@@ -332,6 +354,7 @@ export const LeadsProvider = ({ children }: { children: ReactNode }) => {
       loadLeads,
       getLeadById,
       updateLeadStatus,
+      updateLeadCategory,
       updateLeadInState,
       deleteLead,
       syncOutbox: runSync,

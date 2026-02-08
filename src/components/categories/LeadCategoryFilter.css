@@ -1,0 +1,51 @@
+.category-filter-scroll {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 16px 16px;
+    /* Extra bottom padding for scrollbar/shadow */
+    margin: 0 -16px;
+    /* Negative margin to scroll edge-to-edge on mobile */
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+.category-filter-scroll::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari */
+}
+
+.category-filter-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.category-filter-item:active {
+    transform: scale(0.96);
+}
+
+.category-filter-item--active {
+    background: var(--text-primary);
+    color: var(--bg);
+    border-color: transparent;
+}
+
+.category-filter-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}

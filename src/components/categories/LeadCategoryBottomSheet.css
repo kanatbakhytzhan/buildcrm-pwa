@@ -1,0 +1,113 @@
+.category-bottom-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.category-bottom-sheet {
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 16px 16px 32px;
+    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0));
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+.category-bottom-sheet__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.category-bottom-sheet__title {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.category-bottom-sheet__close {
+    background: var(--bg);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.category-bottom-sheet__list {
+    display: grid;
+    gap: 8px;
+}
+
+.category-sheet-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s ease;
+}
+
+.category-sheet-item:active {
+    transform: scale(0.98);
+}
+
+.category-sheet-item.selected {
+    background: var(--surface);
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.category-sheet-item__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.category-sheet-item__dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.category-sheet-item__info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.category-sheet-item__label {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+}

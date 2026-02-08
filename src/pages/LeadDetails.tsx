@@ -5,6 +5,7 @@ import { ArrowLeft, Bot, MessageCircle, MapPin, FileText, MessageSquare, Phone }
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../context/LeadsContext'
 import { sanitizePhoneForTel, sanitizePhoneForWa } from '../utils/phone'
+import LeadCategorySelect from '../components/categories/LeadCategorySelect'
 import ThreeDotsMenu from '../components/ThreeDotsMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { getCachedLeadById } from '../services/offlineDb'
@@ -32,14 +33,11 @@ const LeadDetails = ({ embedded = false, leadId: propLeadId }: LeadDetailsProps 
   const id = propLeadId || urlId
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
-  const { getLeadById, updateLeadStatus, deleteLead, showToast, updateLeadInState } = useLeads()
+  const { getLeadById, updateLeadCategory, deleteLead, showToast, updateLeadInState } = useLeads()
   const leadFromContext = id ? getLeadById(id) : undefined
   const [cachedLead, setCachedLead] = useState<NormalizedLead | null>(null)
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
   const lead = leadFromContext ?? cachedLead ?? undefined
-  const [statusLoading, setStatusLoading] = useState<
-    'success' | 'failed' | null
-  >(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -191,21 +189,7 @@ const LeadDetails = ({ embedded = false, leadId: propLeadId }: LeadDetailsProps 
     window.location.href = `https://wa.me/${phoneWa}`
   }
 
-  const handleStatusChange = async (status: 'success' | 'failed') => {
-    if (!lead) {
-      return
-    }
-    setActionError(null)
-    setStatusLoading(status)
-    try {
-      await updateLeadStatus(lead.id, status)
-      navigate('/leads', { replace: true })
-    } catch {
-      setActionError('Не удалось обновить статус. Попробуйте снова.')
-    } finally {
-      setStatusLoading(null)
-    }
-  }
+
 
   const handleDelete = async () => {
     if (!lead) {
@@ -502,27 +486,18 @@ const LeadDetails = ({ embedded = false, leadId: propLeadId }: LeadDetailsProps 
               </div>
             )}
           </div>
-          <div className="details-sticky">
-            <div className="details-actions">
-              <button
-                className="details-action-reject"
-                type="button"
-                onClick={() => handleStatusChange('failed')}
-                disabled={Boolean(statusLoading) || deleteLoading}
-              >
-                {statusLoading === 'failed' ? 'Сохраняю…' : 'Отказать'}
-              </button>
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => handleStatusChange('success')}
-                disabled={Boolean(statusLoading) || deleteLoading}
-              >
-                {statusLoading === 'success' ? 'Сохраняю…' : 'Взять в работу'}
-              </button>
-            </div>
-            {actionError && <div className="error-text">{actionError}</div>}
+          <div className="card" style={{ marginTop: 12, padding: 16 }}>
+            <div className="settings-title" style={{ marginBottom: 8 }}>Категория лида</div>
+            <LeadCategorySelect
+              category={lead.category}
+              onChange={(cat) => updateLeadCategory(lead.id, cat)}
+            />
           </div>
+
+          <div className="details-sticky" style={{ display: 'none' }}>
+            {/* Sticky footer removed */}
+          </div>
+          {actionError && <div className="error-text">{actionError}</div>}
           <ConfirmDialog
             open={confirmOpen}
             title="Удалить лид?"

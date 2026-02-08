@@ -515,6 +515,18 @@ export const updateLeadStatus = async (id: string, status: LeadStatus) => {
   return data ?? { id, status }
 }
 
+export const updateLeadCategory = async (id: string, category: string) => {
+  const data = await request<unknown>(`/api/leads/${id}/category`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+    body: JSON.stringify({ category }),
+  })
+  return data ?? { id, category }
+}
+
 /** PATCH /api/leads/{id} — status, next_call_at, etc. */
 export const updateLeadFields = async (
   id: string,

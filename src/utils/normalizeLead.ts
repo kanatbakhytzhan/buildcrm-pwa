@@ -6,6 +6,7 @@ export type NormalizedLead = {
   request: string
   createdAt: string
   status: 'new' | 'success' | 'failed'
+  category: import('../types/leadCategory').LeadCategory
   comments_count?: number
   last_comment?: string
 }
@@ -78,28 +79,28 @@ export const normalizeLead = (raw: Record<string, unknown>): NormalizedLead => {
   const id =
     String(
       raw.id ??
-        raw._id ??
-        raw.leadId ??
-        raw.lead_id ??
-        raw.uuid ??
-        raw.pk ??
-        '',
+      raw._id ??
+      raw.leadId ??
+      raw.lead_id ??
+      raw.uuid ??
+      raw.pk ??
+      '',
     ) || ''
   const name = String(
     raw.name ??
-      raw.full_name ??
-      raw.fullName ??
-      raw.client_name ??
-      raw.contact_name ??
-      '',
+    raw.full_name ??
+    raw.fullName ??
+    raw.client_name ??
+    raw.contact_name ??
+    '',
   )
   const phone = String(
     raw.phone ??
-      raw.phoneNumber ??
-      raw.mobile ??
-      raw.contact_phone ??
-      raw.tel ??
-      '',
+    raw.phoneNumber ??
+    raw.mobile ??
+    raw.contact_phone ??
+    raw.tel ??
+    '',
   )
   const city = String(raw.city ?? raw.town ?? raw.location ?? raw.region ?? '')
   const request = String(raw.summary || raw.request || raw.description || '')
@@ -110,6 +111,13 @@ export const normalizeLead = (raw: Record<string, unknown>): NormalizedLead => {
       .toLocaleString('sv-SE', { timeZone: 'Asia/Almaty' })
       .replace(' ', 'T')
   const status = normalizeLeadStatus(raw.status ?? 'new')
+
+  // Normalize category
+  let category = String(raw.category ?? 'new').toLowerCase()
+  if (!['hot', 'warm', 'cold', 'non_target', 'postponed', 'new'].includes(category)) {
+    category = 'new'
+  }
+
   const comments_count =
     typeof raw.comments_count === 'number'
       ? raw.comments_count
@@ -127,6 +135,7 @@ export const normalizeLead = (raw: Record<string, unknown>): NormalizedLead => {
     request,
     createdAt,
     status,
+    category: category as import('../types/leadCategory').LeadCategory,
     ...(comments_count !== undefined && !Number.isNaN(comments_count)
       ? { comments_count }
       : {}),

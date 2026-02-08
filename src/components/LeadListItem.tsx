@@ -5,6 +5,9 @@ import { formatBadgeAlmatyFix } from '../utils/dateFormat'
 import { sanitizePhoneForTel, sanitizePhoneForWa } from '../utils/phone'
 import { useLeads } from '../context/LeadsContext'
 import LeadActionSheet from './LeadActionSheet'
+import { getCategoryColor } from '../utils/categoryColorMap'
+import LeadCategoryBadge from './categories/LeadCategoryBadge'
+import LeadCategoryBottomSheet from './categories/LeadCategoryBottomSheet'
 
 const LONG_PRESS_MS = 400
 const MOVE_THRESHOLD_PX = 10
@@ -17,8 +20,9 @@ type LeadListItemProps = {
 }
 
 const LeadListItem = ({ lead, onClick, pendingSync, isActive = false }: LeadListItemProps) => {
-  const { updateLeadStatus } = useLeads()
+  const { updateLeadCategory } = useLeads()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressHandledRef = useRef(false)
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -29,6 +33,7 @@ const LeadListItem = ({ lead, onClick, pendingSync, isActive = false }: LeadList
   const phoneTel = phoneValue ? sanitizePhoneForTel(phoneValue) : ''
   const phoneWa = phoneValue ? sanitizePhoneForWa(phoneValue) : ''
   const phoneAvailable = Boolean(phoneTel && phoneWa)
+  const categoryColor = getCategoryColor(lead.category)
 
   const clearLongPressTimer = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -92,19 +97,16 @@ const LeadListItem = ({ lead, onClick, pendingSync, isActive = false }: LeadList
     if (phoneWa) window.location.href = `https://wa.me/${phoneWa}`
   }, [phoneWa])
 
-  const handleSuccess = useCallback(() => {
-    updateLeadStatus(lead.id, 'success')
-  }, [lead.id, updateLeadStatus])
-
-  const handleFailed = useCallback(() => {
-    updateLeadStatus(lead.id, 'failed')
-  }, [lead.id, updateLeadStatus])
+  const handleChangeCategory = useCallback(() => {
+    setMenuOpen(false)
+    setCategorySheetOpen(true)
+  }, [])
 
   return (
     <>
       <button
         type="button"
-        className={`lead-item lead-item--${lead.status} ${isActive ? 'lead-item--active' : ''}`}
+        className={`lead-item ${isActive ? 'lead-item--active' : ''}`}
         onClick={handleClick}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -112,10 +114,14 @@ const LeadListItem = ({ lead, onClick, pendingSync, isActive = false }: LeadList
         onPointerLeave={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onContextMenu={(e) => e.preventDefault()}
+        style={{ '--lead-color': categoryColor } as React.CSSProperties}
       >
-        <span className="lead-item__stripe" aria-hidden="true" />
+        <span className="lead-item__stripe" aria-hidden="true" style={{ backgroundColor: categoryColor }} />
         <div className="lead-item__content">
-          <div className="lead-item__name">{lead.name || 'Без имени'}</div>
+          <div className="lead-item__header-row">
+            <div className="lead-item__name">{lead.name || 'Без имени'}</div>
+            <LeadCategoryBadge category={lead.category} />
+          </div>
           <div className="lead-item__meta">
             <span className="lead-item__icon" aria-hidden="true">
               <MapPin size={16} />
@@ -146,15 +152,26 @@ const LeadListItem = ({ lead, onClick, pendingSync, isActive = false }: LeadList
           </span>
         </div>
       </button>
+
       {menuOpen && (
         <LeadActionSheet
           lead={lead}
           onClose={() => setMenuOpen(false)}
           onCall={handleCall}
           onWhatsApp={handleWhatsApp}
-          onSuccess={handleSuccess}
-          onFailed={handleFailed}
+          onChangeCategory={handleChangeCategory}
           phoneAvailable={phoneAvailable}
+        />
+      )}
+
+      {categorySheetOpen && (
+        <LeadCategoryBottomSheet
+          currentCategory={lead.category}
+          onSelect={(cat) => {
+            updateLeadCategory(lead.id, cat)
+            setCategorySheetOpen(false)
+          }}
+          onClose={() => setCategorySheetOpen(false)}
         />
       )}
     </>

@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useLeads } from '../context/LeadsContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
-import SegmentTabs from '../components/SegmentTabs'
+// import SegmentTabs from '../components/SegmentTabs'
 import LeadListItem from '../components/LeadListItem'
 import LeadDetails from './LeadDetails'
 import './Leads.css'
-
-type LeadStatusTab = 'new' | 'success' | 'failed'
+import LeadCategoryFilter from '../components/categories/LeadCategoryFilter'
+import type { LeadCategory } from '../types/leadCategory'
 
 const PULL_THRESHOLD = 50
 const PULL_MAX = 80
@@ -16,6 +16,7 @@ const PULL_MAX = 80
 const Leads = () => {
   const navigate = useNavigate()
   const { id: urlLeadId } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { isDesktop } = useBreakpoint()
   const scrollRef = useRef<HTMLDivElement>(null)
   const startYRef = useRef(0)
@@ -26,7 +27,12 @@ const Leads = () => {
     loadLeads,
     pendingLeadIds,
   } = useLeads()
-  const [activeTab, setActiveTab] = useState<LeadStatusTab>('new')
+
+  const categoryParam = searchParams.get('category')
+  const [activeCategory, setActiveCategory] = useState<LeadCategory | 'all'>(
+    (categoryParam as LeadCategory) || 'all'
+  )
+
   const [pullY, setPullY] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(urlLeadId || null)
@@ -35,7 +41,17 @@ const Leads = () => {
     loadLeads()
   }, [loadLeads])
 
-  // Update selected lead when URL changes (for desktop split view)
+  // Sync state with URL param
+  useEffect(() => {
+    const cat = searchParams.get('category')
+    if (cat) {
+      setActiveCategory(cat as LeadCategory)
+    } else {
+      setActiveCategory('all')
+    }
+  }, [searchParams])
+
+  // Update selected lead when URL changes
   useEffect(() => {
     if (isDesktop && urlLeadId) {
       setSelectedLeadId(urlLeadId)
@@ -76,25 +92,33 @@ const Leads = () => {
     }
   }, [pullY, handleRefresh])
 
-  const tabs = useMemo<{ id: LeadStatusTab; label: string }[]>(
-    () => [
-      { id: 'new', label: 'Новые' },
-      { id: 'success', label: 'Успешные' },
-      { id: 'failed', label: 'Отказные' },
-    ],
-    [],
+  const filteredLeads = leads.filter((lead) => {
+    if (activeCategory === 'all') return true
+    return lead.category === activeCategory
+  })
+
+  // Sort by date desc
+  const sortedLeads = [...filteredLeads].sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
-  const filteredLeads = leads.filter((lead) => lead.status === activeTab)
+  const handleCategoryChange = (category: LeadCategory | 'all') => {
+    setActiveCategory(category)
+    setSearchParams(prev => {
+      if (category === 'all') {
+        prev.delete('category')
+      } else {
+        prev.set('category', category)
+      }
+      return prev
+    })
+  }
 
   const handleLeadClick = (leadId: string) => {
     if (isDesktop) {
-      // Desktop: update selected lead for split view
       setSelectedLeadId(leadId)
-      // Update URL without navigation
       window.history.pushState({}, '', `/leads/${leadId}`)
     } else {
-      // Mobile: navigate to details page
       navigate(`/leads/${leadId}`)
     }
   }
@@ -110,7 +134,7 @@ const Leads = () => {
             <div className="page-header">
               <div className="page-header__text">
                 <h1 className="title">Заявки</h1>
-                <p className="subtitle">Новые обращения клиентов</p>
+                <p className="subtitle">Обращения клиентов</p>
               </div>
               <button
                 className="ghost-button"
@@ -121,20 +145,21 @@ const Leads = () => {
                 {isRefreshing ? <Loader2 size={16} className="spin" /> : 'Обновить'}
               </button>
             </div>
-            <SegmentTabs<LeadStatusTab>
-              tabs={tabs}
-              activeId={activeTab}
-              onChange={(id) => setActiveTab(id)}
-            />
+            <div className="category-filter-container">
+              <LeadCategoryFilter
+                activeCategory={activeCategory}
+                onChange={handleCategoryChange}
+              />
+            </div>
           </div>
           <div className="leads-scroll">
             {isLoading && !isRefreshing && <div className="info-text">Загрузка заявок…</div>}
             {error && <div className="error-text">{error}</div>}
-            {!isLoading && !error && filteredLeads.length === 0 && (
-              <div className="info-text">Пока нет заявок</div>
+            {!isLoading && !error && sortedLeads.length === 0 && (
+              <div className="info-text">Нет заявок в этой категории</div>
             )}
             <div className="lead-list">
-              {filteredLeads.map((lead) => (
+              {sortedLeads.map((lead) => (
                 <LeadListItem
                   key={lead.id}
                   lead={lead}
@@ -159,24 +184,25 @@ const Leads = () => {
     )
   }
 
-  // Mobile: List View (original behavior)
+  // Mobile: List View
   return (
     <div className="leads-page">
       <div className="leads-page__header">
         <div className="page-header">
           <div className="page-header__text">
             <h1 className="title">Заявки</h1>
-            <p className="subtitle">Новые обращения клиентов</p>
+            <p className="subtitle">Обращения клиентов</p>
           </div>
           <button className="ghost-button" type="button" onClick={handleRefresh}>
             Обновить
           </button>
         </div>
-        <SegmentTabs<LeadStatusTab>
-          tabs={tabs}
-          activeId={activeTab}
-          onChange={(id) => setActiveTab(id)}
-        />
+        <div className="category-filter-container">
+          <LeadCategoryFilter
+            activeCategory={activeCategory}
+            onChange={handleCategoryChange}
+          />
+        </div>
       </div>
       <div
         ref={scrollRef}
@@ -199,11 +225,11 @@ const Leads = () => {
         </div>
         {isLoading && !isRefreshing && <div className="info-text">Загрузка заявок…</div>}
         {error && <div className="error-text">{error}</div>}
-        {!isLoading && !error && filteredLeads.length === 0 && (
-          <div className="info-text">Пока нет заявок</div>
+        {!isLoading && !error && sortedLeads.length === 0 && (
+          <div className="info-text">Нет заявок в этой категории</div>
         )}
         <div className="lead-list">
-          {filteredLeads.map((lead) => (
+          {sortedLeads.map((lead) => (
             <LeadListItem
               key={lead.id}
               lead={lead}

@@ -1,0 +1,30 @@
+.lead-category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    line-height: 1;
+    transition: all 0.2s ease;
+}
+
+.lead-category-badge--clickable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.lead-category-badge--clickable:active {
+    transform: scale(0.96);
+    opacity: 0.8;
+}
+
+.lead-category-badge__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}

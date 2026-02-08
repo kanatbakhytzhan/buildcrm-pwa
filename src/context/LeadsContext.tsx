@@ -15,6 +15,7 @@ export type LeadsContextValue = {
   loadLeads: () => Promise<{ raw: unknown; normalized: NormalizedLead[] }>
   getLeadById: (id: string) => NormalizedLead | undefined
   updateLeadStatus: (id: string, status: 'success' | 'failed') => Promise<void>
+  updateLeadCategory: (id: string, category: import('../types/leadCategory').LeadCategory) => Promise<void>
   updateLeadInState: (
     id: string,
     update: Partial<NormalizedLead>,
