@@ -1,0 +1,43 @@
+/* Reaction Timer Component - shows "без ответа X минут" */
+.reaction-timer {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    background: var(--color-gray-100);
+    color: var(--text-secondary);
+}
+
+.reaction-timer__icon {
+    display: flex;
+    align-items: center;
+}
+
+.reaction-timer--urgent {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.reaction-timer--urgent .reaction-timer__icon svg {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.reaction-timer__text {
+    white-space: nowrap;
+}
