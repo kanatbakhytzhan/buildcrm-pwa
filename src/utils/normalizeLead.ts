@@ -9,6 +9,9 @@ export type NormalizedLead = {
   category: import('../types/leadCategory').LeadCategory
   comments_count?: number
   last_comment?: string
+  score?: number  // AI score 0-100
+  lastClientMessageAt?: string  // For reaction timer
+  isAiMuted?: boolean  // Manual mode flag
 }
 
 const unwrapStatusValue = (value: unknown) => {
@@ -127,6 +130,13 @@ export const normalizeLead = (raw: Record<string, unknown>): NormalizedLead => {
   const last_comment =
     typeof raw.last_comment === 'string' ? raw.last_comment : undefined
 
+  // AI features
+  const score = typeof raw.score === 'number' ? raw.score : undefined
+  const lastClientMessageAt = raw.last_client_message_at
+    ? String(raw.last_client_message_at)
+    : undefined
+  const isAiMuted = typeof raw.is_ai_muted === 'boolean' ? raw.is_ai_muted : undefined
+
   return {
     id,
     name,
@@ -140,5 +150,8 @@ export const normalizeLead = (raw: Record<string, unknown>): NormalizedLead => {
       ? { comments_count }
       : {}),
     ...(last_comment ? { last_comment } : {}),
+    ...(score !== undefined ? { score } : {}),
+    ...(lastClientMessageAt ? { lastClientMessageAt } : {}),
+    ...(isAiMuted !== undefined ? { isAiMuted } : {}),
   }
 }

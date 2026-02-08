@@ -8,6 +8,10 @@ import LeadActionSheet from './LeadActionSheet'
 import { getCategoryColor } from '../utils/categoryColorMap'
 import LeadCategoryBadge from './categories/LeadCategoryBadge'
 import LeadCategoryBottomSheet from './categories/LeadCategoryBottomSheet'
+import { LeadScore } from './LeadScore'
+import { ReactionTimer } from './ReactionTimer'
+import { getScoreLevel } from '../types/leadScore'
+import type { LeadScore as LeadScoreType } from '../types/leadScore'
 
 const LONG_PRESS_MS = 400
 const MOVE_THRESHOLD_PX = 10
@@ -34,6 +38,12 @@ const LeadListItem = ({ lead, onClick, pendingSync, isActive = false }: LeadList
   const phoneWa = phoneValue ? sanitizePhoneForWa(phoneValue) : ''
   const phoneAvailable = Boolean(phoneTel && phoneWa)
   const categoryColor = getCategoryColor(lead.category)
+
+  // AI features
+  const leadScore: LeadScoreType | undefined = lead.score !== undefined ? {
+    score: lead.score,
+    level: getScoreLevel(lead.score),
+  } : undefined
 
   const clearLongPressTimer = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -120,13 +130,22 @@ const LeadListItem = ({ lead, onClick, pendingSync, isActive = false }: LeadList
         <div className="lead-item__content">
           <div className="lead-item__header-row">
             <div className="lead-item__name">{lead.name || 'Без имени'}</div>
-            <LeadCategoryBadge category={lead.category} />
+            <div style={{ display: 'flex', gap: 'var(--space-1)', alignItems: 'center' }}>
+              {leadScore && <LeadScore score={leadScore} showLabel={false} />}
+              <LeadCategoryBadge category={lead.category} />
+            </div>
           </div>
           <div className="lead-item__meta">
             <span className="lead-item__icon" aria-hidden="true">
               <MapPin size={16} />
             </span>
             <span>{cityLabel}</span>
+            {lead.lastClientMessageAt && (
+              <ReactionTimer
+                lastClientMessageAt={lead.lastClientMessageAt}
+                urgentThresholdMinutes={30}
+              />
+            )}
           </div>
           <div className="lead-item__request">
             {lead.request || 'Без описания'}

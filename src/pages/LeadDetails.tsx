@@ -17,8 +17,13 @@ import {
   postLeadComment,
   type LeadComment,
 } from '../services/api'
-import { formatBadgeAlmatyFix } from '../utils/dateFormat'
+import { formatBadge AlmatyFix } from '../utils/dateFormat'
 import type { NormalizedLead } from '../utils/normalizeLead'
+import { AiModeToggle } from '../components/AiModeToggle'
+import { LeadScore } from '../components/LeadScore'
+import { ReactionTimer } from '../components/ReactionTimer'
+import { getScoreLevel } from '../types/leadScore'
+import type { LeadScore as LeadScoreType } from '../types/leadScore'
 
 const AI_MUTE_NO_TENANT_MESSAGE =
   'У этого лида не указан клиент (tenant). Сначала привяжите лид к клиенту или выполните исправление в админ-диагностике.'
@@ -175,6 +180,12 @@ const LeadDetails = ({ embedded = false, leadId: propLeadId }: LeadDetailsProps 
       .join('')
     : 'Л'
 
+  // AI features
+  const leadScore: LeadScoreType | undefined = lead && lead.score !== undefined ? {
+    score: lead.score,
+    level: getScoreLevel(lead.score),
+  } : undefined
+
   const handleCall = () => {
     if (!phoneTel) {
       return
@@ -308,6 +319,17 @@ const LeadDetails = ({ embedded = false, leadId: propLeadId }: LeadDetailsProps 
               </div>
             </div>
           </div>
+          {leadScore && (
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <LeadScore score={leadScore} showLabel={true} showDetails={false} />
+              {lead.lastClientMessageAt && (
+                <ReactionTimer
+                  lastClientMessageAt={lead.lastClientMessageAt}
+                  urgentThresholdMinutes={30}
+                />
+              )}
+            </div>
+          )}
           <div className="lead-actions">
             <button
               className="success-button"
@@ -442,38 +464,21 @@ const LeadDetails = ({ embedded = false, leadId: propLeadId }: LeadDetailsProps 
             </div>
           </div>
           <div className="card settings-card" style={{ marginTop: 12 }}>
-            <div className="settings-row settings-row--static">
-              <div className="settings-left">
-                <div className="settings-icon settings-icon--primary" aria-hidden="true">
-                  <Bot size={20} />
+            <div style={{ padding: 16 }}>
+              <div className="settings-title" style={{ marginBottom: 12 }}>AI Режим</div>
+              <AiModeToggle
+                isAiMode={!aiMutedInChat && aiEnabledGlobal}
+                onChange={(isAi) => handleAiChatToggle(!isAi)}
+                disabled={aiChatLoading || aiChatStatusLoading || !aiEnabledGlobal}
+              />
+              {!aiEnabledGlobal && (
+                <div className="settings-hint" style={{ color: 'var(--danger)', marginTop: 8 }}>
+                  AI выключен для всего клиента в настройках.
                 </div>
-                <div className="settings-text">
-                  <div className="settings-title">AI в этом чате</div>
-                  <div className="settings-hint">
-                    Когда выключено — бот не отвечает в этом чате, но лиды продолжают сохраняться.
-                  </div>
-                  {!aiEnabledGlobal && (
-                    <div className="settings-hint" style={{ color: 'var(--danger)', marginTop: 4 }}>
-                      AI выключен для всего клиента в настройках.
-                    </div>
-                  )}
-                </div>
-              </div>
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  aria-label="AI в этом чате"
-                  checked={!aiMutedInChat}
-                  disabled={aiChatLoading || aiChatStatusLoading || !aiEnabledGlobal}
-                  onChange={(e) => handleAiChatToggle(e.target.checked ? false : true)}
-                />
-                <span className="switch-track">
-                  <span className="switch-thumb" />
-                </span>
-              </label>
+              )}
             </div>
             {aiMuteError && (
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
                 <div className="error-text" style={{ marginBottom: 8 }}>{aiMuteError}</div>
                 <button
                   className="secondary-button"
