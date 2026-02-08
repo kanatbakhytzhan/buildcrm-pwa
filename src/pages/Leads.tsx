@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useLeads } from '../context/LeadsContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
@@ -8,34 +8,27 @@ import { KanbanBoard } from '../components/kanban'
 import LeadDetails from './LeadDetails'
 import './Leads.css'
 import { categoryToStageKey } from '../types/stage'
-import type { LeadCategory } from '../types/leadCategory'
 
-const Leads = () => {
+export function Leads() {
   const navigate = useNavigate()
-  const { id: urlLeadId } = useParams()
   const { isDesktop } = useBreakpoint()
+  const [searchParams] = useSearchParams()
+  const selectedLeadId = searchParams.get('id')
+
   const {
     leads,
     error,
     loadLeads,
-    updateLeadCategory,
     showToast,
+    updateLeadInState,
   } = useLeads()
 
   const { stages } = useStages()
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(urlLeadId || null)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => {
     loadLeads()
   }, [loadLeads])
-
-  // Update selected lead when URL changes
-  useEffect(() => {
-    if (isDesktop && urlLeadId) {
-      setSelectedLeadId(urlLeadId)
-    }
-  }, [urlLeadId, isDesktop])
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
@@ -46,32 +39,41 @@ const Leads = () => {
     }
   }, [loadLeads])
 
-  // Handle lead drag to new stage
+  // Handle lead drag & drop between kanban columns
   const handleLeadMove = useCallback(
     async (leadId: string, toStageKey: string) => {
       const lead = leads.find(l => l.id === leadId)
       if (!lead) return
 
-      const currentStageKey = categoryToStageKey(lead.category)
-      if (currentStageKey === toStageKey) return
+      // Get current stage_key (prefer stage_key, fallback to category mapping)
+      const currentStageKey = lead.stage_key || categoryToStageKey(lead.category)
+      if (currentStageKey === toStageKey) return // No change
+
+      const toStage = stages.find(s => s.key === toStageKey)
+      const stageName = toStage?.title || toStageKey
+
+      // Optimistic update
+      const previousLead = { ...lead }
+      await updateLeadInState(leadId, { stage_key: toStageKey })
 
       try {
-        // Optimistic update happens in context
-        await updateLeadCategory(leadId, toStageKey as LeadCategory)
-        showToast(`Лид перемещен в "${stages.find(s => s.key === toStageKey)?.title}"`)
+        // Call API to update stage_key
+        await import('../services/api').then(m => m.updateLeadStage(leadId, toStageKey))
+        showToast(`Лид перемещен в "${stageName}"`)
       } catch (err) {
-        showToast('Ошибка при перемещении лида')
-        // Rollback handled by context
+        // Rollback on error
+        await updateLeadInState(leadId, { stage_key: previousLead.stage_key, category: previousLead.category })
+        showToast('Не удалось переместить лид')
+        console.error('[Leads] Move failed:', err)
       }
     },
-    [leads, stages, updateLeadCategory, showToast]
+    [leads, stages, updateLeadInState, showToast]
   )
 
   // Handle lead click
   const handleLeadClick = useCallback(
     (leadId: string) => {
       if (isDesktop) {
-        setSelectedLeadId(leadId)
         window.history.pushState({}, '', `/leads/${leadId}`)
       } else {
         navigate(`/leads/${leadId}`)
