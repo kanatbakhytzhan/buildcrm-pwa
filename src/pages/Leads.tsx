@@ -9,6 +9,9 @@ import LeadDetails from './LeadDetails'
 import './Leads.css'
 import LeadCategoryFilter from '../components/categories/LeadCategoryFilter'
 import type { LeadCategory } from '../types/leadCategory'
+import { Skeleton } from '../components/ui/Skeleton'
+import { EmptyState } from '../components/ui/EmptyState'
+import { getCategoryConfig } from '../utils/categoryColorMap'
 
 const PULL_THRESHOLD = 50
 const PULL_MAX = 80
@@ -97,10 +100,19 @@ const Leads = () => {
     return lead.category === activeCategory
   })
 
-  // Sort by date desc
-  const sortedLeads = [...filteredLeads].sort((a, b) =>
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  // Sort: no_reply first, then wants_call, then by update time
+  const sortedLeads = [...filteredLeads].sort((a, b) => {
+    const aConfig = getCategoryConfig(a.category)
+    const bConfig = getCategoryConfig(b.category)
+
+    // Priority categories first (no_reply=1, wants_call=2)
+    if (aConfig.order !== bConfig.order) {
+      return aConfig.order - bConfig.order
+    }
+
+    // Within same category, sort by most recent
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
 
   const handleCategoryChange = (category: LeadCategory | 'all') => {
     setActiveCategory(category)
@@ -153,22 +165,37 @@ const Leads = () => {
             </div>
           </div>
           <div className="leads-scroll">
-            {isLoading && !isRefreshing && <div className="info-text">Загрузка заявок…</div>}
+            {isLoading && !isRefreshing && (
+              <div className="lead-list">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} style={{ padding: '12px', background: 'var(--surface)', borderRadius: 'var(--radius-md)', marginBottom: '8px' }}>
+                    <Skeleton variant="title" width="60%" />
+                    <div style={{ marginTop: '8px' }}><Skeleton variant="text" width="40%" /></div>
+                    <div style={{ marginTop: '8px' }}><Skeleton variant="text" width="80%" /></div>
+                  </div>
+                ))}
+              </div>
+            )}
             {error && <div className="error-text">{error}</div>}
             {!isLoading && !error && sortedLeads.length === 0 && (
-              <div className="info-text">Нет заявок в этой категории</div>
+              <EmptyState
+                title="Нет заявок"
+                description={activeCategory === 'all' ? 'Заявки появятся здесь автоматически' : `Нет заявок в категории "${getCategoryConfig(activeCategory).label}"`}
+              />
             )}
-            <div className="lead-list">
-              {sortedLeads.map((lead) => (
-                <LeadListItem
-                  key={lead.id}
-                  lead={lead}
-                  pendingSync={pendingLeadIds.includes(lead.id)}
-                  onClick={() => handleLeadClick(lead.id)}
-                  isActive={lead.id === selectedLeadId}
-                />
-              ))}
-            </div>
+            {!isLoading && !error && sortedLeads.length > 0 && (
+              <div className="lead-list">
+                {sortedLeads.map((lead) => (
+                  <LeadListItem
+                    key={lead.id}
+                    lead={lead}
+                    pendingSync={pendingLeadIds.includes(lead.id)}
+                    onClick={() => handleLeadClick(lead.id)}
+                    isActive={lead.id === selectedLeadId}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div className="leads-split-view__details">

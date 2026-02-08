@@ -1,4 +1,13 @@
-export type LeadCategory = 'hot' | 'warm' | 'cold' | 'non_target' | 'postponed' | 'new'
+// Business-specific categories for aluminum panel sales
+export type LeadCategory =
+    | 'no_reply'              // НЕ ОТВЕТИЛИ
+    | 'wants_call'            // ПРОСИТ ЗВОНОК
+    | 'partial_data'          // НЕПОЛНЫЕ ДАННЫЕ
+    | 'full_data'             // ПОЛНЫЕ ДАННЫЕ
+    | 'measurement_assigned'  // ЗАМЕР НАЗНАЧЕН
+    | 'measurement_done'      // ЗАМЕР ПРОВЕДЕН
+    | 'rejected'              // ОТКАЗ/НЕЦЕЛЕВОЙ
+    | 'won'                   // УСПЕШНО
 
 export interface LeadCategoryConfig {
     id: LeadCategory
@@ -6,14 +15,17 @@ export interface LeadCategoryConfig {
     color: string
     bgColor: string
     borderColor: string
-    icon?: string // Lucide icon name or similar identifier
+    icon?: string
+    order: number  // For sorting
 }
 
 export const LEAD_CATEGORIES: LeadCategory[] = [
-    'new',
-    'hot',
-    'warm',
-    'cold',
-    'postponed',
-    'non_target',
+    'no_reply',
+    'wants_call',
+    'partial_data',
+    'full_data',
+    'measurement_assigned',
+    'measurement_done',
+    'rejected',
+    'won',
 ]

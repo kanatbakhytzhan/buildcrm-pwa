@@ -116,9 +116,13 @@ export const normalizeLead = (raw: Record<string, unknown>): NormalizedLead => {
   const status = normalizeLeadStatus(raw.status ?? 'new')
 
   // Normalize category
-  let category = String(raw.category ?? 'new').toLowerCase()
-  if (!['hot', 'warm', 'cold', 'non_target', 'postponed', 'new'].includes(category)) {
-    category = 'new'
+  let category = String(raw.category ?? 'no_reply').toLowerCase()
+  const validCategories = [
+    'no_reply', 'wants_call', 'partial_data', 'full_data',
+    'measurement_assigned', 'measurement_done', 'rejected', 'won'
+  ]
+  if (!validCategories.includes(category)) {
+    category = 'no_reply'  // Default to "НЕ ОТВЕТИЛИ"
   }
 
   const comments_count =
