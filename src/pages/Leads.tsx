@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import { useLeads } from '../context/LeadsContext'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 // import SegmentTabs from '../components/SegmentTabs'
@@ -12,6 +12,7 @@ import type { LeadCategory } from '../types/leadCategory'
 import { Skeleton } from '../components/ui/Skeleton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { getCategoryConfig } from '../utils/categoryColorMap'
+import type { LeadScoreLevel } from '../types/leadScore'
 
 const PULL_THRESHOLD = 50
 const PULL_MAX = 80
@@ -35,6 +36,8 @@ const Leads = () => {
   const [activeCategory, setActiveCategory] = useState<LeadCategory | 'all'>(
     (categoryParam as LeadCategory) || 'all'
   )
+  const [scoreFilter, setScoreFilter] = useState<LeadScoreLevel | 'all'>('all')
+  const [reactionMinutes, setReactionMinutes] = useState<number | null>(null)
 
   const [pullY, setPullY] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -96,8 +99,25 @@ const Leads = () => {
   }, [pullY, handleRefresh])
 
   const filteredLeads = leads.filter((lead) => {
-    if (activeCategory === 'all') return true
-    return lead.category === activeCategory
+    // Category filter
+    if (activeCategory !== 'all' && lead.category !== activeCategory) {
+      return false
+    }
+
+    // Score filter
+    if (scoreFilter !== 'all') {
+      if (!lead.score) return false
+      const level = lead.score >= 70 ? 'hot' : lead.score >= 40 ? 'warm' : 'cold'
+      if (level !== scoreFilter) return false
+    }
+
+    // Reaction time filter ("без ответа > X минут")
+    if (reactionMinutes !== null && lead.lastClientMessageAt) {
+      const minutesSince = (Date.now() - new Date(lead.lastClientMessageAt).getTime()) / 60000
+      if (minutesSince < reactionMinutes) return false
+    }
+
+    return true
   })
 
   // Sort: no_reply first, then wants_call, then by update time
@@ -162,6 +182,65 @@ const Leads = () => {
                 activeCategory={activeCategory}
                 onChange={handleCategoryChange}
               />
+
+              {/* Score and Reaction Time Filters */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px', paddingLeft: '16px', paddingRight: '16px' }}>
+                {/* Score filter */}
+                <select
+                  value={scoreFilter}
+                  onChange={(e) => setScoreFilter(e.target.value as LeadScoreLevel | 'all')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--surface)',
+                    fontSize: '14px',
+                  }}
+                >
+                  <option value="all">Все score</option>
+                  <option value="hot">🔥 Горячий</option>
+                  <option value="warm">🟡 Теплый</option>
+                  <option value="cold">❄️ Холодный</option>
+                </select>
+
+                {/* Reaction time chips */}
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)', marginRight: '4px' }}>Без ответа:</span>
+                  {[5, 15, 30].map(minutes => (
+                    <button
+                      key={minutes}
+                      onClick={() => setReactionMinutes(reactionMinutes === minutes ? null : minutes)}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 'var(--radius-full)',
+                        border: reactionMinutes === minutes ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                        background: reactionMinutes === minutes ? 'var(--primary-bg)' : 'transparent',
+                        color: reactionMinutes === minutes ? 'var(--primary)' : 'var(--text-secondary)',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        fontWeight: reactionMinutes === minutes ? '500' : '400',
+                      }}
+                    >
+                      &gt;{minutes}м
+                    </button>
+                  ))}
+                  {reactionMinutes !== null && (
+                    <button
+                      onClick={() => setReactionMinutes(null)}
+                      style={{
+                        padding: '2px',
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        color: 'var(--text-secondary)',
+                      }}
+                      aria-label="Сбросить фильтр"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
           <div className="leads-scroll">
