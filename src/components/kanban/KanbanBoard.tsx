@@ -9,6 +9,7 @@ import {
 import type { Stage } from '../../types/stage'
 import type { NormalizedLead } from '../../utils/normalizeLead'
 import { groupLeadsByStage } from '../../utils/leadSorting'
+import { categoryToStageKey } from '../../types/stage'
 import { KanbanColumn } from './KanbanColumn'
 import { LeadCard } from './LeadCard'
 import './KanbanBoard.css'
@@ -52,7 +53,16 @@ export function KanbanBoard({
         }
 
         const leadId = active.id as string
-        const toStageKey = over.id as string
+        const overId = over.id as string
+        let toStageKey = overId
+
+        // If dropped over a lead card, resolve its stage from the lead itself
+        if (!stages.some(s => s.key === overId)) {
+            const overLead = leads.find(l => l.id === overId)
+            if (overLead) {
+                toStageKey = overLead.stage_key || categoryToStageKey(overLead.category)
+            }
+        }
 
         // Move lead to new stage
         if (toStageKey && active.id !== over.id) {
