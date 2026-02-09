@@ -4,14 +4,14 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: var(--background);
+    background: var(--bg-primary);
 }
 
 .leads-page__header {
     flex-shrink: 0;
     padding: 16px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border-color);
+    background: transparent;
+    border-bottom: 1px solid transparent;
 }
 
 .page-header {
@@ -39,12 +39,12 @@
 }
 
 .ghost-button {
-    padding: 8px 16px;
+    padding: 10px 14px;
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    background: transparent;
+    border-radius: var(--radius-lg);
+    background: var(--surface);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
@@ -53,8 +53,8 @@
 }
 
 .ghost-button:hover {
-    background: var(--surface-secondary);
-    border-color: var(--primary);
+    background: var(--surface-muted);
+    border-color: var(--border-strong);
 }
 
 .ghost-button:disabled {
@@ -87,7 +87,7 @@
 .leads-split-view {
     display: flex;
     height: 100vh;
-    background: var(--background);
+    background: var(--bg-primary);
 }
 
 .leads-split-view__kanban {
@@ -118,7 +118,7 @@
 .error-text {
     padding: 16px;
     margin: 16px;
-    background: var(--danger-bg);
+    background: var(--color-danger-50);
     color: var(--danger);
     border-radius: var(--radius-md);
     border: 1px solid var(--danger);

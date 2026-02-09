@@ -1,8 +1,8 @@
 .lead-card {
     background: var(--surface);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 12px;
+    border-radius: var(--radius-lg);
+    padding: 14px;
     margin-bottom: 8px;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -13,20 +13,20 @@
 }
 
 .lead-card:hover {
-    border-color: var(--primary);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-color: rgba(37, 99, 235, 0.5);
+    box-shadow: var(--shadow-sm);
     transform: translateY(-1px);
 }
 
 .lead-card--selected {
     border-color: var(--primary);
-    background: var(--primary-bg);
+    background: var(--primary-light);
 }
 
 .lead-card--dragging {
     opacity: 0.5;
     cursor: grabbing;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-md);
 }
 
 .lead-card__header {
@@ -40,7 +40,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-weight: 500;
+    font-weight: 600;
     font-size: 14px;
     color: var(--text-primary);
     flex: 1;
@@ -87,7 +87,7 @@
     font-size: 11px;
     color: var(--text-secondary);
     padding: 3px 6px;
-    background: var(--surface-secondary);
+    background: var(--surface-muted);
     border-radius: var(--radius-sm);
     align-self: flex-start;
     margin-top: auto;
@@ -95,6 +95,6 @@
 
 .lead-card__timer--urgent {
     color: var(--danger);
-    background: var(--danger-bg);
+    background: var(--color-danger-50);
     font-weight: 500;
 }
