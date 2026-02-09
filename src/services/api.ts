@@ -161,6 +161,13 @@ const buildDetailedError = async (
     message = `HTTP ${response.status} (no body)`
   }
 
+  if (typeof message === 'object') {
+    try {
+      message = JSON.stringify(message)
+    } catch {
+      message = 'РћС€РёР±РєР° Р·Р°РїСЂРѕСЃР°'
+    }
+  }
   if (response.status === 401) {
     message = options?.isLogin ? 'Неверный логин или пароль' : 'Сессия истекла. Войдите снова.'
     if (!options?.skipUnauthorized) {

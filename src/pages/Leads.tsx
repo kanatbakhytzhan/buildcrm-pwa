@@ -57,8 +57,23 @@ export function Leads() {
       await updateLeadInState(leadId, { stage_key: toStageKey })
 
       try {
-        // Call API to update stage_key
-        await import('../services/api').then(m => m.updateLeadStage(leadId, toStageKey))
+        // Call API to update stage (prefer stage_id when available)
+        const api = await import('../services/api')
+        if (toStage?.id != null) {
+          try {
+            await api.patchLeadStage(leadId, toStage.id)
+          } catch (err) {
+            const status = (err as { status?: number })?.status
+            if (status === 422) {
+              // Fallback to stage_key for older backends
+              await api.updateLeadStage(leadId, toStageKey)
+            } else {
+              throw err
+            }
+          }
+        } else {
+          await api.updateLeadStage(leadId, toStageKey)
+        }
         showToast(`Лид перемещен в "${stageName}"`)
       } catch (err) {
         // Rollback on error
@@ -167,3 +182,4 @@ export function Leads() {
 }
 
 export default Leads
+
