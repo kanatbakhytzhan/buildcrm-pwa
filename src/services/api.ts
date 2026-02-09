@@ -1589,14 +1589,19 @@ export const getLeadsForPipeline = async (): Promise<PipelineLead[]> => {
 export const patchLeadStage = async (
   leadId: string,
   stageId: string | number,
+  stageKey?: string,
 ): Promise<unknown> => {
+  const body: Record<string, unknown> = { stage_id: stageId }
+  if (stageKey && stageKey.trim()) {
+    body.stage_key = stageKey.trim()
+  }
   return request<unknown>(`/api/leads/${leadId}/stage`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders(),
     },
-    body: JSON.stringify({ stage_id: stageId }),
+    body: JSON.stringify(body),
   })
 }
 

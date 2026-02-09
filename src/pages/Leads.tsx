@@ -61,7 +61,7 @@ export function Leads() {
         const api = await import('../services/api')
         if (toStage?.id != null) {
           try {
-            await api.patchLeadStage(leadId, toStage.id)
+            await api.patchLeadStage(leadId, toStage.id, toStageKey)
           } catch (err) {
             const status = (err as { status?: number })?.status
             if (status === 422) {
@@ -89,7 +89,7 @@ export function Leads() {
   const handleLeadClick = useCallback(
     (leadId: string) => {
       if (isDesktop) {
-        window.history.pushState({}, '', `/leads/${leadId}`)
+        navigate(`/leads?id=${leadId}`)
       } else {
         navigate(`/leads/${leadId}`)
       }
@@ -139,7 +139,7 @@ export function Leads() {
         {/* Details Panel */}
         <div className="leads-split-view__details">
           {selectedLead ? (
-            <LeadDetails />
+            <LeadDetails embedded leadId={selectedLeadId ?? undefined} />
           ) : (
             <div className="empty-selection">
               <p>Выберите заявку для просмотра деталей</p>
